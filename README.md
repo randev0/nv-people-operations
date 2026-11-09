@@ -35,7 +35,7 @@ A second HR admin, `hr.ops@example.com`, also exists.
 2. **manager.my**: Requests → *My team* tab. Open the new request and assign it to an IT person (for example Priya Ismail, it.owner). Try a request ID from another team: you get 404.
 3. **it.owner**: My Work → complete **Create company account**. *Hand over laptop* becomes startable straight away. Assigned requests → start, comment, resolve.
 4. **employee.my**: close the resolved request.
-5. **hr.admin**: Dashboard ("Open the N requests" opens the queue filtered to exactly the records behind the insight) → Templates → New template (try a prerequisite loop to see the warning) → Onboarding → Assign checklist (deadlines are calculated per task, and each task needs an owner) → Employees (create, edit, disable login).
+5. **hr.admin**: Dashboard (most overdue onboarding tasks with a link to each task; "New hires waiting on IT equipment" lists the requests longest-waiting first, and its button opens exactly those records; every metric card opens the list behind its number) → Templates → New template (try a prerequisite loop to see the warning) → Onboarding → Assign checklist (deadlines are calculated per task, and each task needs an owner) → Employees (create, edit, disable login).
 
 ## Local setup
 
@@ -79,7 +79,7 @@ The seed is idempotent. It only creates missing fixture rows (deterministic IDs 
 | `npm run test:e2e` | Same harness with Playwright: full request lifecycle with AI routing, task unblocking, template editor, role navigation, keyboard-only use, axe accessibility scan, 390 px layout, filter persistence and the dashboard insight drill-down |
 | `npm run db:generate` / `db:migrate` / `db:seed` / `db:verify-seed` | Prisma client, `migrate deploy`, seed, seed assertions |
 
-Latest local results (2026-11-09): lint 0 problems, typecheck 0 errors, unit 33/33, integration 27/27, e2e 11/11 (including keyboard-only and axe WCAG 2.1 AA scans), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
+Latest local results (2026-11-09): lint 0 problems, typecheck 0 errors, unit 36/36, integration 27/27, e2e 12/12 (including keyboard-only and axe WCAG 2.1 AA scans), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 
 ## Deployment
 

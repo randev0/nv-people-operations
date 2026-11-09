@@ -1,8 +1,10 @@
 /* Originally adapted from ERACare src/app/globals.css (token + base layer pattern).
-   2026-11-09 redesign: NEXT Ventures brand system — ink-black canvas, crimson
-   primary, mint signal, Poppins + Martian Mono — plus a restrained psychedelic
-   signature (aurora light, holographic edges, iridescent progress) that only
-   appears on hero moments and progress, never behind body text. */
+   2026-11-09 redesign: NEXT Ventures brand system (ink canvas, Poppins, Martian Mono
+   for clocks/IDs) plus a restrained psychedelic signature (aurora light, holographic
+   edges, iridescent progress) used only decoratively.
+   Colour meaning is fixed: violet = actions and selection, cyan = links and focus,
+   coral = overdue and errors, amber = warnings/blocked, green = done. Brand crimson
+   appears only in decoration (orb, aurora), never as a status or an action. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -16,25 +18,25 @@
     --card-foreground: 240 10% 96%;
     --popover: 240 7% 9%;
     --popover-foreground: 240 10% 96%;
-    --primary: 348 83% 46%;           /* NEXT crimson, darkened from #ED1C3E for 5:1 with white */
+    --primary: 258 72% 58%;           /* violet: buttons, selected tabs/nav (white text 6.1:1) */
     --primary-foreground: 0 0% 100%;
-    --brand: 350 85% 52%;             /* #ED1C3E as used on nextventures.io */
-    --link: 350 100% 68%;             /* crimson readable on ink */
+    --brand: 350 85% 52%;             /* NEXT crimson #ED1C3E: decorative only */
+    --link: 188 85% 62%;              /* cyan links (11:1 on cards) */
     --secondary: 240 6% 13%;
     --secondary-foreground: 240 10% 96%;
     --muted: 240 6% 12%;
-    --muted-foreground: 240 6% 66%;
+    --muted-foreground: 240 6% 72%;   /* secondary text, 8.9:1 on cards */
     --accent: 240 6% 14%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 352 90% 62%;
+    --destructive: 6 92% 67%;
     --destructive-foreground: 0 0% 100%;
-    --success: 155 89% 58%;           /* NEXT mint #36F4A4 */
-    --warning: 38 96% 62%;
-    --danger: 352 100% 70%;
-    --info: 262 90% 76%;
+    --success: 152 70% 52%;           /* done */
+    --warning: 38 96% 62%;            /* blocked, needs attention soon */
+    --danger: 6 92% 67%;              /* coral: overdue, errors */
+    --info: 262 90% 78%;              /* in progress / informational */
     --border: 240 6% 17%;
     --input: 240 6% 24%;
-    --ring: 155 89% 58%;              /* mint focus ring: visible on ink and on crimson */
+    --ring: 188 85% 62%;              /* cyan focus ring, visible on ink and on violet */
     --radius: 0.875rem;
 
     /* Psychedelic signature palette */
@@ -66,7 +68,7 @@
     font-size: 14px;
   }
   ::selection {
-    background: hsl(var(--brand) / 0.45);
+    background: hsl(var(--primary) / 0.45);
   }
   :focus-visible {
     outline: 2px solid hsl(var(--ring));
@@ -86,9 +88,9 @@
     background-size: 22px 22px;
   }
 
-  /* Martian Mono eyebrow label: "AT A GLANCE —" */
+  /* Small section label. Sans (not mono) so it stays readable at 11px. */
   .eyebrow {
-    @apply font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground;
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground;
   }
 
   /* Aurora: slow-drifting light behind hero moments. Decorative only. */

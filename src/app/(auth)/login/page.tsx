@@ -25,16 +25,16 @@ export default async function LoginPage() {
           <span className="text-lg font-semibold tracking-[-0.03em]">People Ops</span>
         </div>
         <div>
-          <p className="eyebrow text-white/70">Next Ventures — one team, four offices</p>
-          <p className="mt-4 text-[56px] font-semibold leading-[1] tracking-[-0.05em]">
-            Every <span className="outline-text">NEXTar</span>,<br />
+          <p className="eyebrow text-white/75">Next Ventures · one team, four offices</p>
+          <p className="mt-4 text-[52px] font-semibold leading-[1.02] tracking-[-0.045em]">
+            Every NEXTar,<br />
             <span className="trip-text">set up to fly.</span>
           </p>
-          <div className="mt-8 h-56 max-w-xl opacity-90">
-            <OfficeMap offices={[{ countryCode: "CY", headcount: 1, joinedLast30: 0 }, { countryCode: "BD", headcount: 1, joinedLast30: 0 }, { countryCode: "LK", headcount: 1, joinedLast30: 0 }, { countryCode: "MY", headcount: 1, joinedLast30: 0 }]} />
+          <div className="mt-8 max-w-xl opacity-90">
+            <OfficeMap linkPins={false} offices={["CY", "BD", "LK", "MY"].map((countryCode) => ({ countryCode, headcount: 0 }))} />
           </div>
         </div>
-        <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/55">Kuala Lumpur · Dhaka · Colombo · Nicosia</p>
+        <p className="text-xs text-white/70">Kuala Lumpur · Dhaka · Colombo · Nicosia</p>
       </section>
       <div className="relative z-10 flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-sm">

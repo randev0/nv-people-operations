@@ -17,6 +17,7 @@ export const metadata = { title: "Requests · People Operations" };
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 const REQUEST_STATUSES = ["SUBMITTED", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "CLOSED"];
+const STATUS_OPTIONS: [string, string][] = [["OPEN", "Open (submitted, assigned or in progress)"], ...REQUEST_STATUSES.map((k): [string, string] => [k, STATUS_LABEL[k]])];
 
 export default async function RequestsPage({ searchParams }: { searchParams: SP }) {
   const me = await requireUser();
@@ -31,7 +32,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: SP 
   ];
   const params = {
     scope: sp(raw.scope) ?? defaultScope, status: sp(raw.status), categoryId: sp(raw.categoryId),
-    priority: sp(raw.priority), countryCode: sp(raw.countryCode), q: sp(raw.q), insight: sp(raw.insight), page: sp(raw.page),
+    priority: sp(raw.priority), countryCode: sp(raw.countryCode), q: sp(raw.q), insight: sp(raw.insight), resolved: sp(raw.resolved), page: sp(raw.page),
   };
   const parsed = listRequestsQuery.safeParse(Object.fromEntries(Object.entries(params).filter(([, v]) => v)));
   const [categories, result] = await Promise.all([
@@ -44,7 +45,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: SP 
     return u.toString();
   };
   const from = qs({ page: params.page });
-  const activeFilters = [params.status, params.categoryId, params.priority, params.countryCode, params.q, params.insight].filter(Boolean).length;
+  const activeFilters = [params.status, params.categoryId, params.priority, params.countryCode, params.q, params.insight, params.resolved].filter(Boolean).length;
 
   return (
     <>
@@ -71,20 +72,25 @@ export default async function RequestsPage({ searchParams }: { searchParams: SP 
       </nav>
 
       {params.insight === "new-hires-it" ? (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-info/30 bg-accent px-4 py-2.5 text-sm text-accent-foreground">
-          <span>Showing the records behind the dashboard insight: <strong>open IT equipment requests from new hires</strong> (joined in the last 60 days, onboarding assigned).</span>
-          <Link href={`/requests?${qs({ insight: undefined })}`} className="inline-flex items-center gap-1 font-medium hover:underline"><X className="h-3.5 w-3.5" aria-hidden />Clear</Link>
-        </div>
+        <FilterBanner clearHref={`/requests?${qs({ insight: undefined })}`}>
+          <strong>New hires waiting on IT equipment:</strong> open IT equipment requests from people who joined in the last 60 days and have an onboarding checklist.
+        </FilterBanner>
+      ) : null}
+      {params.resolved === "last-7-days" ? (
+        <FilterBanner clearHref={`/requests?${qs({ resolved: undefined })}`}>
+          <strong>Resolved in the last 7 days:</strong> requests whose resolution time falls in the 7×24 hours ending now, whatever their status today.
+        </FilterBanner>
       ) : null}
 
       <form className="mb-3 flex flex-wrap items-end gap-2" method="get" aria-label="Filter requests">
         <input type="hidden" name="scope" value={params.scope} />
         {params.insight ? <input type="hidden" name="insight" value={params.insight} /> : null}
+        {params.resolved ? <input type="hidden" name="resolved" value={params.resolved} /> : null}
         <label className="min-w-[14rem] flex-1 text-sm">
           <span className="sr-only">Search</span>
           <input name="q" defaultValue={params.q} placeholder="Search title, requester or #number" className="h-9 w-full rounded-md border border-input bg-card px-3 placeholder:text-muted-foreground" />
         </label>
-        <Select name="status" label="Status" value={params.status} options={REQUEST_STATUSES.map((k) => [k, STATUS_LABEL[k]])} />
+        <Select name="status" label="Status" value={params.status} options={STATUS_OPTIONS} />
         <Select name="categoryId" label="Category" value={params.categoryId} options={categories.map((c) => [c.id, c.name])} />
         <Select name="priority" label="Priority" value={params.priority} options={Object.entries(PRIORITY_LABEL)} />
         {params.scope === "all" || params.scope === "team" ? (
@@ -119,6 +125,15 @@ export default async function RequestsPage({ searchParams }: { searchParams: SP 
         </>
       )}
     </>
+  );
+}
+
+function FilterBanner({ children, clearHref }: { children: React.ReactNode; clearHref: string }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-info/30 bg-info/[0.08] px-4 py-2.5 text-sm" role="status">
+      <span>{children}</span>
+      <Link href={clearHref} className="inline-flex items-center gap-1 font-medium text-link hover:underline"><X className="h-3.5 w-3.5" aria-hidden />Clear</Link>
+    </div>
   );
 }
 

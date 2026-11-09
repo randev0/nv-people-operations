@@ -33,7 +33,9 @@ export async function listRequests(actor: Actor, q: ListRequestsQuery) {
   const scope = requestListScopeWhere(actor, q.scope);
   if (!scope) throw forbidden(`The "${q.scope}" view is not available for your role.`);
   const filters: Prisma.ServiceRequestWhereInput[] = [requestReadScopeWhere(actor), scope];
-  if (q.status) filters.push({ status: q.status });
+  if (q.status === "OPEN") filters.push({ status: { in: ["SUBMITTED", "ASSIGNED", "IN_PROGRESS"] } });
+  else if (q.status) filters.push({ status: q.status });
+  if (q.resolved === "last-7-days") filters.push({ resolvedAt: { gt: new Date(Date.now() - 7 * 86_400_000), lte: new Date() } });
   if (q.categoryId) filters.push({ categoryId: q.categoryId });
   if (q.priority) filters.push({ priority: q.priority });
   if (q.countryCode) filters.push({ requester: { countryCode: q.countryCode } });

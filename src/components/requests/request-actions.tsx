@@ -74,6 +74,8 @@ export function AssignmentPanel({ request, suggestion }: { request: ReqInfo; sug
   const [options, setOptions] = useState<Option[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [assigneeId, setAssigneeId] = useState("");
+  /** A person picked from the AI suggestion before the eligible list has loaded. */
+  const [wanted, setWanted] = useState<string | null>(null);
   const canAssign = request.allowedActions.includes("ASSIGN") || request.allowedActions.includes("REASSIGN");
 
   useEffect(() => {
@@ -81,7 +83,18 @@ export function AssignmentPanel({ request, suggestion }: { request: ReqInfo; sug
     api<Option[]>(`/requests/${request.id}/assignee-options`).then(setOptions).catch((e) => setLoadError(errorText(e)));
   }, [canAssign, request.id]);
 
+  // Apply a suggestion chosen while the list was still loading, once it arrives.
+  if (wanted && options) {
+    setWanted(null);
+    applyPerson(wanted, options);
+  }
+
   const chosen = options?.find((o) => o.id === assigneeId);
+
+  function applyPerson(id: string, list: Option[]) {
+    if (list.some((o) => o.id === id)) setAssigneeId(id);
+    else setLoadError("The suggested person is not an eligible assignee for this request.");
+  }
 
   return (
     <>
@@ -131,10 +144,7 @@ export function AssignmentPanel({ request, suggestion }: { request: ReqInfo; sug
         initial={suggestion}
         currentCategoryId={request.categoryId}
         currentPriority={request.priority}
-        onUsePerson={canAssign ? (id) => {
-          if (options?.some((o) => o.id === id)) setAssigneeId(id);
-          else setLoadError("The suggested person is not an eligible assignee for this request.");
-        } : undefined}
+        onUsePerson={canAssign ? (id) => (options ? applyPerson(id, options) : setWanted(id)) : undefined}
       />
     </>
   );

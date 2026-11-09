@@ -50,6 +50,7 @@ test("request lifecycle with AI routing (draft suggestion + assigner suggestion)
   await signIn(page, "it.owner@example.com");
   await page.goto("/my-work?kind=request");
   await page.getByRole("link", { name: title }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(title); // wait for the detail page, not the list's inline buttons
   await page.getByRole("button", { name: "Start work" }).click();
   await expect(page.getByRole("button", { name: "Mark resolved" })).toBeVisible();
   await page.getByLabel("Add a comment").fill("Replaced the cable; please confirm.");

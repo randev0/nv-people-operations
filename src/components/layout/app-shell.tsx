@@ -61,7 +61,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
           <BrandOrb />
           <div className="leading-tight">
             <p className="text-[15px] font-semibold tracking-[-0.03em]">People Ops</p>
-            <p className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-muted-foreground">Next Ventures</p>
+            <p className="text-[11px] text-muted-foreground">Next Ventures</p>
           </div>
         </div>
         <nav className="flex-1 space-y-5 overflow-y-auto px-2 pb-4">
@@ -80,11 +80,11 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                         className={cn(
                           "relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] transition-colors",
                           active
-                            ? "bg-white/[0.06] font-medium text-foreground before:absolute before:-left-2 before:top-1/2 before:h-5 before:w-[3px] before:-translate-y-1/2 before:rounded-full before:bg-brand before:shadow-[0_0_12px_hsl(var(--brand))]"
+                            ? "bg-white/[0.06] font-medium text-foreground before:absolute before:-left-2 before:top-1/2 before:h-5 before:w-[3px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:shadow-[0_0_12px_hsl(var(--primary))]"
                             : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
                         )}
                       >
-                        <Icon className={cn("h-4 w-4", active ? "text-brand" : "")} aria-hidden />
+                        <Icon className={cn("h-4 w-4", active ? "text-info" : "")} aria-hidden />
                         {label}
                       </Link>
                     </li>

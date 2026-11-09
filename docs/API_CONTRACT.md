@@ -55,7 +55,7 @@ Pagination: `page` ≥1 default 1, `pageSize` 1–100 default 20. Ordering is de
 | GET /employees/:id | — | EmployeeDTO | Self, direct manager, HR (else 404) |
 | PATCH /employees/:id | subset `{name,role,countryCode,departmentId,managerId,joiningDate,employmentStatus,loginEnabled}` | EmployeeDTO | HR; reporting rules validated |
 | GET /employees/manager-options | — | UserSummary[] (login-enabled MANAGER/HR) | HR (for employee form) |
-| GET /requests | `page,pageSize,q,status,categoryId,priority,countryCode,scope=mine\|team\|assigned\|all,insight=new-hires-it` | Paginated RequestDTO | `team` Manager/HR only, `all` HR only, else 403. `insight=new-hires-it` (HR only) narrows to the requests behind the dashboard insight, using the same server function as the card |
+| GET /requests | `page,pageSize,q,status=SUBMITTED\|ASSIGNED\|IN_PROGRESS\|RESOLVED\|CLOSED\|OPEN,categoryId,priority,countryCode,scope=mine\|team\|assigned\|all,insight=new-hires-it,resolved=last-7-days` | Paginated RequestDTO | `team` Manager/HR only, `all` HR only, else 403. `status=OPEN` = submitted, assigned or in progress. `insight=new-hires-it` (HR only) narrows to the requests behind the dashboard's equipment queue, using the same server function. `resolved=last-7-days` = resolvedAt within the rolling 7×24 h ending now (whatever the current status). All scope rules still apply |
 | POST /requests | `{title,description,categoryId,priority}` | RequestDTO 201 | Any; requester = session user |
 | GET /requests/:id | — | RequestDTO | Read policy |
 | GET /requests/:id/comments | `page,pageSize` | Paginated CommentDTO (oldest first) | Read policy |
@@ -78,7 +78,7 @@ Pagination: `page` ≥1 default 1, `pageSize` 1–100 default 20. Ordering is de
 | GET /my-work | `page,pageSize,kind=request\|task,status?,overdue?` | Paginated RequestDTO or TaskDTO+hire | Current user's assignments |
 | POST /onboarding-tasks/:id/transition | `{action:START\|COMPLETE,expectedVersion}` | TaskDTO | Task owner |
 | GET /onboarding-tasks/:id/events | `page,pageSize` | Paginated `{id,fromStatus,toStatus,actor:{id,name},createdAt}` | Owner or checklist read scope |
-| GET /dashboard | — | DashboardDTO | HR |
+| GET /dashboard | — | DashboardDTO; also `requestFlow` (aging by status, `backlog` = open count at the end of each UTC day for 30 days with the last point at `asOf`, rolling 7-day `windows` with opened/resolved counts), `offices` (headcount, active onboardings), `overdueTasks` (every overdue onboarding task, most overdue first), `equipmentQueue` (one row per open IT request from a recent hire, oldest first) | HR |
 | GET /dashboard/mine | — | `{myOpenRequests,myAssignedRequests,myPendingTasks,myOverdueTasks,myOnboardingProgress?,team?}` | Authenticated; `team` for Manager |
 | POST /ai/route-request | `{title (3–160), description (10–5000)}` | RouterDTO | Authenticated; 10/min/user |
 | GET /health | — | `{status:"ok"}` or 503 | Public |

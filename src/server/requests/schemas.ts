@@ -27,13 +27,16 @@ export const listRequestsQuery = z
   .object({
     ...paginationSchema,
     q: z.string().trim().max(100).optional(),
-    status: z.enum(REQUEST_STATUSES).optional(),
+    /** OPEN = submitted, assigned or in progress (the dashboard's "open requests"). */
+    status: z.enum([...REQUEST_STATUSES, "OPEN"]).optional(),
     categoryId: z.uuid().optional(),
     priority: z.enum(PRIORITIES).optional(),
     countryCode: z.enum(["BD", "MY", "LK", "CY"]).optional(),
     scope: z.enum(["mine", "team", "assigned", "all"]).default("mine"),
     /** Records behind a dashboard number (HR only). */
     insight: z.enum(["new-hires-it"]).optional(),
+    /** Resolved within the rolling 7 days ending now (the dashboard's "resolved, last 7 days"). */
+    resolved: z.enum(["last-7-days"]).optional(),
   })
   .strict();
 

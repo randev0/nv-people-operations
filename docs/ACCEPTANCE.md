@@ -62,3 +62,4 @@ Evidence re-run on commit `cfe2666` (final local run after a clean `npm ci`). St
 | 2026-11-09 | Live (e654398) Playwright smoke + `verify-seed` | insight drill-down 5/5 rows, Back keeps filter, blocked reasons shown, 390 px no overflow; seed 22/22 |
 | 2026-11-09 | NEXT brand redesign: lint, typecheck, unit, integration, e2e | lint 0, typecheck 0, unit 33/33, integration 27/27, e2e 11/11 (axe 15 pages, 0 violations on dark theme) |
 | 2026-11-09 | Live reseed (be1e028): backup, truncate, seed ×2, `verify-seed` ×2, smoke | 22/22 both runs, totals unchanged on re-run (100/40/8); 5 demo logins OK; insight 5 rows |
+| 2026-11-09 | Dashboard review: lint, typecheck, unit, integration, e2e ×2 | lint 0, typecheck 0, unit 36/36 (office clocks/DST, office weekends), integration 27/27, e2e 12/12 twice (new test 5: overdue task in first screen, card numbers = list counts, pin label on focus; axe 0 violations) |

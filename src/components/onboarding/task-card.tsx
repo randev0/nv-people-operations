@@ -4,13 +4,14 @@
 // restyled as a GOV.UK-style task-list row: title, plain-language block reason, owner,
 // due date and a status tag, with the owner's actions inline.
 import { useState } from "react";
+import { blockedReason } from "@/lib/onboarding-text";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Circle, Lock, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OverdueBadge, StatusBadge } from "@/components/common/status-badge";
 import { Avatar } from "@/components/common/surface";
 import { api, ApiError, errorText } from "@/lib/api";
-import { formatCalendarDate, formatDueDay, lowerFirst } from "@/lib/format";
+import { formatCalendarDate, formatDueDay } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export type TaskView = {
@@ -31,15 +32,6 @@ export type TaskView = {
 };
 
 /** "Waiting for IT to create company account" — names who is blocking and what they must do. */
-export function blockedReason(prereqs: TaskView["prerequisites"]): string {
-  const open = prereqs.filter((p) => p.status !== "COMPLETED");
-  if (!open.length) return "";
-  const parts = open.map((p) => {
-    const who = p.departmentName === "Manager" ? "the manager" : p.departmentName;
-    return `${who} to ${lowerFirst(p.title)}${p.status === "IN_PROGRESS" ? " (in progress)" : ""}`;
-  });
-  return `Waiting for ${parts.join(", and for ")}`;
-}
 
 function StatusIcon({ s }: { s: string }) {
   const cls = "mt-0.5 h-5 w-5 shrink-0";
@@ -74,7 +66,7 @@ export function TaskCard({ task, timezone, showHire = false }: { task: TaskView;
   const reason = task.effectiveStatus === "BLOCKED" ? blockedReason(task.prerequisites) : null;
 
   return (
-    <li className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-start sm:justify-between" aria-label={task.title}>
+    <li id={`task-${task.id}`} className="flex scroll-mt-24 flex-col gap-3 px-4 py-3.5 target:bg-info/[0.12] target:shadow-[inset_3px_0_0_hsl(var(--info))] sm:flex-row sm:items-start sm:justify-between" aria-label={task.title}>
       <div className="flex min-w-0 gap-3">
         <StatusIcon s={task.effectiveStatus} />
         <div className="min-w-0">

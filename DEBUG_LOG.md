@@ -93,3 +93,43 @@ The same run's console showed `Refused to execute script from '…/_next/static/
 ---
 
 _Earlier draft of this log listed a test-suite isolation defect (integration D03 mutating a shared fixture) as Bug 3. It was a genuine but minor test-only issue and is kept in `WORKLOG.md`._
+
+---
+
+## Further significant bugs found in the dashboard review (2026-11-09)
+
+The three entries above remain the required write-ups. These two were found later, during a calculation-by-calculation review of the dashboard, and are recorded in the same format.
+
+### Bug 4 — Dashboard metric cards opened lists that did not contain the records behind their numbers
+
+**Affected commit/date:** `bc3089f` (card links) and earlier (`e654398` for "Open requests"), found 2026-11-09.
+
+**Symptom:** the HR card "Open requests 24" opened `/requests?scope=all`, which listed **40** requests (every status). The card "Resolved this week 8" opened `/requests?scope=all&status=RESOLVED`, which also showed 8 rows, but not the same 8.
+
+**Investigation:**
+- Traced each number to its query in `src/server/dashboard/service.ts`. "Open requests" counts status ∈ {SUBMITTED, ASSIGNED, IN_PROGRESS}, but the list API had no way to express that group, so the link fell back to an unfiltered list.
+- "Resolved this week" counted `resolvedAt` inside the rolling 7×24 h ending at `asOf`; the link filtered on *current status* RESOLVED. Checked in SQL on the local seed: `resolvedAt` in the last 7 days = 8, status RESOLVED = 8, both = 7. One request resolved 7 days ago had since been **closed** (counted by the card, missing from the list), and one resolved 9 days ago was still RESOLVED (in the list, not counted). Equal totals hid the mismatch.
+- The label "this week" also suggested a calendar week while the code used a rolling window.
+
+**Root cause:** the dashboard's definitions had no equivalent filters in the request list, so the links approximated them.
+
+**Fix:** the list API accepts `status=OPEN` and `resolved=last-7-days` (`src/server/requests/schemas.ts`, `service.ts`), applied inside the normal read scope; the cards link to exactly those filters, the list shows a banner stating the definition, and the card reads "Resolved, last 7 days" with the comparison "vs N in the 7 days before". "Overdue onboarding tasks" now jumps to the full overdue task list on the same page.
+
+**Verification:** e2e `verification-flows.spec.ts` test 5 reads each card's number and asserts the list it opens shows the same count ("24 requests", "8 requests"). The first version of that test passed for the wrong reason: it took the first digit in the accessible name, which was the "7" of "last 7 days". It now reads the value element itself.
+
+**Prevention:** every dashboard number that links somewhere has a list filter with the same definition, and the e2e test compares them.
+
+### Bug 5 — "Use as assignee" on the AI suggestion could fail with a false "not eligible" error
+
+**Affected commit/date:** since the assigner suggestion panel (`4a1136a`), found 2026-11-09 when an e2e run failed.
+
+**Symptom:** `flows.spec.ts` failed at `expect(getByLabel("Assign to")).not.toHaveValue("")`. The trace showed the select still disabled ("Loading people…") when the manager clicked "Use Priya Ismail as assignee"; afterwards the select stayed empty.
+
+**Investigation:** in `src/components/requests/request-actions.tsx` the handler checked `options?.some(...)`. While the eligible-assignee list was still loading, `options` was `null`, so the check failed and the panel showed "The suggested person is not an eligible assignee", which is false: she is eligible. Earlier runs passed only because the list usually loaded before the click. The same run also exposed a test race (clicking "Start work" before the detail page replaced the My Work list), fixed separately in the test.
+
+**Root cause:** the click handler treated "not loaded yet" the same as "not eligible".
+
+**Fix:** a choice made before the list arrives is kept (`wanted`) and applied as soon as the options load; the eligibility error is shown only when the loaded list really excludes the person.
+
+**Verification:** e2e suite run twice in a row after the fix: 12/12 both times.
+
