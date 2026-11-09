@@ -91,7 +91,7 @@ export async function routeRequest(
         : undefined,
     );
   }
-  const suggestion = validateSuggestion(result.toolInput, ctx);
+  const suggestion = validateSuggestion(result.output, ctx);
   console.info(JSON.stringify({ event: "ai.route", requestId, latencyMs, outcome: suggestion ? "OK" : "INVALID_OUTPUT" }));
   if (!suggestion) throw aiInvalidOutput();
   return suggestion;

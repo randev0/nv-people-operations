@@ -24,16 +24,16 @@ export type RouterDTO = {
   needsReview: true;
 };
 
-/** JSON Schema given to the model as the forced tool's input schema. */
-export const toolInputJsonSchema = {
+/** JSON Schema for structured output (output_config.format). */
+export const outputJsonSchema = {
   type: "object",
   properties: {
     categoryId: { type: "string", description: "One of the supplied category ids." },
     priority: { type: "string", enum: ["LOW", "MEDIUM", "HIGH", "URGENT"] },
     suggestedDepartmentId: { type: "string", description: "One of the supplied department ids." },
-    suggestedAssigneeId: { type: ["string", "null"], description: "One of the supplied candidate ids, or null." },
+    suggestedAssigneeId: { anyOf: [{ type: "string" }, { type: "null" }], description: "One of the supplied candidate ids, or null." },
     explanation: { type: "string", description: "At most 300 characters, grounded in the description." },
   },
   required: ["categoryId", "priority", "suggestedDepartmentId", "suggestedAssigneeId", "explanation"],
   additionalProperties: false,
-} as const;
+};
