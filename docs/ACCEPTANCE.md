@@ -56,3 +56,4 @@ Evidence re-run on commit `cfe2666` (final local run after a clean `npm ci`). St
 | 2026-11-09 | VPS: `prisma migrate deploy`, seed once, `verify-seed` | migration applied; 22/22 |
 | 2026-11-09 | Live smoke (curl from a separate machine) | health ok; 5 role logins; unauth 401; employee→/api/dashboard 403; dashboard 4×25 headcount, 5 insight hires; request lifecycle to CLOSED; unrelated employee 404; HR completing another owner's task 403, owner 200; copied cookie after logout 401; data persisted across service restart |
 | 2026-11-09 | Live AI smoke via public URL (3 requests) | 200 each, 5.9–8.3 s bridge time, bridge + app logs `ok:true` / `OK` |
+| 2026-11-09 | Live data cleanup after smoke tests | test requests #41/#42 removed, Farzana Rahman's check-in task restored; VPS verify-seed 22/22 |
