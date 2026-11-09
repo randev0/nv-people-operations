@@ -56,7 +56,6 @@ async function main() {
 
   // ---- People (managers before reports) ----
   const users = buildUsers();
-  const byKey = new Map(users.map((u) => [u.key, u]));
   const idOf = new Map<string, string>();
   const order = [...users].sort((a, b) => rank(a) - rank(b));
   function rank(u: UserFixture) {

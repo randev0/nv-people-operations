@@ -20,6 +20,8 @@ export type RouterDTO = {
   priority: ModelOutput["priority"];
   suggestedDepartmentId: string;
   suggestedAssigneeId: string | null;
+  /** Display name for the advisory person suggestion (added to the pack DTO for the UI). */
+  suggestedAssigneeName: string | null;
   explanation: string;
   needsReview: true;
 };

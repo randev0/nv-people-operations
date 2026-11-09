@@ -70,7 +70,7 @@ export function buildUsers(): UserFixture[] {
   const users: UserFixture[] = [];
   const used = new Set<string>();
   const email = (first: string, last: string) => {
-    let base = `${slug(first)}.${slug(last)}`;
+    const base = `${slug(first)}.${slug(last)}`;
     let e = `${base}@example.com`;
     let n = 2;
     while (used.has(e)) e = `${base}${n++}@example.com`;

@@ -37,7 +37,7 @@ Pagination: `page` ≥1 default 1, `pageSize` 1–100 default 20. Ordering is de
 - **TaskDTO** `{id, onboardingId, title, description, department:{id,name}, owner:UserSummary, dueDay, dueDate, status, effectiveStatus, isOverdue, version, prerequisites:[{id,title,status}], allowedActions:("START"|"COMPLETE")[]}`; in My Work also `hire:{id,name,department:{id,name}}`.
 - **OnboardingSummary** `{id, employee:UserSummary, startDate, timezone, templateName, completedAt, progress:{total,completed,pending,inProgress,blocked,overdue,percent}}`
 - **OnboardingDTO** = OnboardingSummary + `{tasks:TaskDTO[]}`
-- **RouterDTO** `{categoryId, priority, suggestedDepartmentId, suggestedAssigneeId:string|null, explanation, needsReview:true}`
+- **RouterDTO** `{categoryId, priority, suggestedDepartmentId, suggestedAssigneeId:string|null, suggestedAssigneeName:string|null, explanation, needsReview:true}` (name added so the advisory person can be shown; it is a candidate the server already validated)
 
 ## Endpoints
 

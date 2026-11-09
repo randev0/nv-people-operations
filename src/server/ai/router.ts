@@ -66,6 +66,7 @@ export function validateSuggestion(raw: unknown, ctx: RoutingContext): RouterDTO
     priority: o.priority,
     suggestedDepartmentId: o.suggestedDepartmentId,
     suggestedAssigneeId: person ? person.id : null,
+    suggestedAssigneeName: person ? person.name : null,
     explanation: explanation.length > 300 ? `${explanation.slice(0, 297)}...` : explanation,
     needsReview: true,
   };
