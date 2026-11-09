@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test:unit": "tsx --conditions=react-server --test tests/unit/*.test.ts",
     "test:integration": "tsx tests/integration/run.ts",
-    "test:e2e": "playwright test",
+    "test:e2e": "tsx tests/integration/run.ts --e2e",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",

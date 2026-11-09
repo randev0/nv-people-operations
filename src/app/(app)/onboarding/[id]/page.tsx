@@ -18,7 +18,8 @@ export default async function OnboardingDetail({ params, searchParams }: { param
   const o = r.data;
   const group = (await searchParams).group === "department" ? "department" : "deadline";
   const groups = new Map<string, typeof o.tasks>();
-  for (const t of o.tasks) {
+  const ordered = group === "deadline" ? [...o.tasks].sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.dueDay - b.dueDay) : o.tasks;
+  for (const t of ordered) {
     const k = group === "department" ? t.department.name : `Due ${formatCalendarDate(t.dueDate)} (day ${t.dueDay})`;
     groups.set(k, [...(groups.get(k) ?? []), t]);
   }

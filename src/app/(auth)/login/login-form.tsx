@@ -29,7 +29,7 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4 rounded-lg border bg-card p-6 shadow-sm" noValidate>
+    <form onSubmit={onSubmit} method="post" className="space-y-4 rounded-lg border bg-card p-6 shadow-sm" noValidate>
       {error ? (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>

@@ -68,7 +68,14 @@ async function runSuite() {
       }
       await sleep(500);
     }
-    const files = process.argv.slice(2).length ? process.argv.slice(2) : ["tests/integration"];
+    const e2e = process.argv.includes("--e2e");
+    const files = process.argv.slice(2).filter((a) => a !== "--e2e");
+    if (e2e) {
+      const t = spawnSync("npx", ["playwright", "test", ...files], { env: { ...env, BASE_URL: `http://localhost:${PORT}` }, stdio: "inherit" });
+      process.exitCode = t.status ?? 1;
+      return;
+    }
+    if (!files.length) files.push("tests/integration");
     const t = spawnSync("npx", ["tsx", "--test", "--test-concurrency=1", ...files.map((f) => (f.endsWith(".ts") ? f : `${f}/*.test.ts`))], {
       env: { ...env, BASE_URL: `http://localhost:${PORT}` },
       stdio: "inherit",
