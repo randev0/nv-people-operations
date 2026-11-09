@@ -173,9 +173,27 @@ async function main() {
   }
 
   // ---- Service requests: 40 = 8 per category, 8 per status, 10 per priority ----
+  // Totals follow the seed contract exactly. Within it, the open queue looks like a real
+  // one: most open requests are days old, a few have gone stale, IT carries the most
+  // open work, and resolved/closed history is spread over the last six weeks.
   const STATUSES = ["SUBMITTED", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "CLOSED"] as const;
   const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
-  const catCodes = CATEGORIES.map((c) => c.code);
+  type Cat = (typeof CATEGORIES)[number]["code"];
+  const IT: Cat = "IT_EQUIPMENT", SW: Cat = "SOFTWARE_ACCESS", HR: Cat = "HR_QUERY", FAC: Cat = "FACILITIES", OT: Cat = "OTHER";
+  // Index i → category. Open (0–23): IT 7, software 6, HR 5, facilities 4, other 2. Done (24–39): the rest.
+  const CAT_PLAN: Cat[] = [
+    IT, SW, IT, HR, FAC, IT, SW, HR, /* submitted */
+    SW, IT, FAC, HR, IT, OT, SW, FAC, /* assigned */
+    HR, IT, SW, FAC, IT, SW, HR, OT, /* in progress */
+    OT, FAC, HR, OT, SW, FAC, OT, HR, /* resolved */
+    IT, OT, FAC, HR, OT, SW, FAC, OT, /* closed */
+  ];
+  // Days before the reference date: created, resolved, closed. Nothing is stamped on the reference day itself.
+  const CREATED_AGO = [3, 1, 6, 2, 1, 4, 2, 11, 2, 9, 3, 5, 12, 4, 6, 1, 6, 15, 4, 9, 3, 7, 10, 20, 5, 8, 12, 4, 15, 9, 18, 6, 14, 20, 25, 11, 30, 18, 38, 42];
+  const RESOLVED_AGO: Record<number, number> = { 24: 1, 25: 2, 26: 3, 27: 1, 28: 5, 29: 4, 30: 9, 31: 2, 32: 9, 33: 15, 34: 19, 35: 7, 36: 24, 37: 12, 38: 30, 39: 36 };
+  const CLOSED_AGO: Record<number, number> = { 32: 7, 33: 12, 34: 16, 35: 5, 36: 21, 37: 10, 38: 27, 39: 33 };
+  // Open IT equipment requests from recent hires (employee.my first) so the insight has real rows.
+  const HIRE_IT_SLOTS = [0, 2, 9, 12, 17];
   const employees = usersOf((u) => u.role === "EMPLOYEE" && !u.recentHire && u.status !== "ON_NOTICE");
   const recentHires = orderedHires; // employee.my first
   const itOwner = users.find((u) => u.email === "it.owner@example.com")!;
@@ -187,13 +205,13 @@ async function main() {
     const id = fixtureId(`req:${i}`);
     if (await db.serviceRequest.findUnique({ where: { id }, select: { id: true } })) continue;
     const status = STATUSES[Math.floor(i / 8)];
-    const cat = catCodes[i % 5];
+    const cat = CAT_PLAN[i];
     const priority = PRIORITIES[i % 4];
     const [title, description] = REQUEST_TEXTS[cat][(textIdx[cat] = (textIdx[cat] ?? -1) + 1)];
 
-    // Requester: open IT equipment requests (i = 0, 5, 10, 15, 20) come from recent hires.
     let requester: UserFixture;
-    if (cat === "IT_EQUIPMENT" && i <= 20) requester = recentHires[[0, 1, 2, 3, 4][i / 5]];
+    const hireSlot = HIRE_IT_SLOTS.indexOf(i);
+    if (hireSlot >= 0) requester = recentHires[hireSlot];
     else if (i === 3 || i === 13) requester = empCy;
     else requester = employees[(i * 7) % employees.length];
 
@@ -208,12 +226,14 @@ async function main() {
       }
     }
     const assigner = requester.managerKey ? uid(requester.managerKey) : hrId;
-    const createdDaysAgo = 44 - i;
-    const created = at(ref, createdDaysAgo, 2, i);
-    const assignedAt = at(ref, createdDaysAgo, 5, i);
-    const startedAt = at(ref, createdDaysAgo - 1, 3, i);
-    const resolvedAt = at(ref, createdDaysAgo - 2, 8, i);
-    const closedAt = at(ref, createdDaysAgo - 3, 4, i);
+    const createdAgo = CREATED_AGO[i];
+    const resolvedAgo = RESOLVED_AGO[i] ?? 0;
+    const created = at(ref, createdAgo, 1 + (i % 7), (i * 7) % 60);
+    const assignedAt = new Date(created.getTime() + 3 * 3_600_000);
+    const startedAgo = status === "IN_PROGRESS" ? Math.max(1, Math.floor(createdAgo * 0.6)) : Math.max(resolvedAgo, Math.floor((createdAgo + resolvedAgo) / 2));
+    const startedAt = at(ref, startedAgo, 13, i);
+    const resolvedAt = at(ref, resolvedAgo, 16, i);
+    const closedAt = at(ref, CLOSED_AGO[i] ?? 0, 18, i);
     const stage = STATUSES.indexOf(status);
     const versions = 1 + stage; // one version bump per transition
 
