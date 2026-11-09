@@ -1,0 +1,310 @@
+// People Operations — relational schema. Field dictionary: ARCHITECTURE.md §3.
+// CHECK constraints that Prisma cannot express are added in the migration SQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+  HR_ADMIN
+}
+
+enum CountryCode {
+  BD
+  MY
+  LK
+  CY
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  ON_PROBATION
+  ON_NOTICE
+}
+
+enum RequestStatus {
+  SUBMITTED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum RequestEventKind {
+  CREATED
+  ASSIGNED
+  REASSIGNED
+  STATUS_CHANGED
+}
+
+model Country {
+  code     CountryCode @id
+  name     String      @unique
+  timezone String
+  users    User[]
+}
+
+model Department {
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String              @unique @db.VarChar(80)
+  isActive           Boolean             @default(true)
+  users              User[]
+  categories         RequestCategory[]
+  templateTasks      TemplateTask[]
+  onboardingTasks    OnboardingTask[]
+}
+
+model User {
+  id               String           @id @default(uuid()) @db.Uuid
+  name             String           @db.VarChar(120)
+  email            String           @unique @db.VarChar(254)
+  passwordHash     String
+  role             Role
+  countryCode      CountryCode
+  country          Country          @relation(fields: [countryCode], references: [code], onDelete: Restrict)
+  departmentId     String           @db.Uuid
+  department       Department       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  managerId        String?          @db.Uuid
+  manager          User?            @relation("Reporting", fields: [managerId], references: [id], onDelete: Restrict)
+  directReports    User[]           @relation("Reporting")
+  joiningDate      DateTime         @db.Date
+  employmentStatus EmploymentStatus
+  loginEnabled     Boolean          @default(true)
+  sessionVersion   Int              @default(1)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @db.Timestamptz(3)
+
+  requestsSubmitted   ServiceRequest[]     @relation("Requester")
+  requestsAssigned    ServiceRequest[]     @relation("Assignee")
+  comments            RequestComment[]
+  requestEventsActed  RequestEvent[]       @relation("EventActor")
+  requestEventsPrev   RequestEvent[]       @relation("EventPrevAssignee")
+  requestEventsNew    RequestEvent[]       @relation("EventNewAssignee")
+  templatesCreated    OnboardingTemplate[]
+  onboarding          Onboarding?          @relation("OnboardingEmployee")
+  onboardingsAssigned Onboarding[]         @relation("OnboardingAssigner")
+  ownedTasks          OnboardingTask[]
+  taskEvents          TaskEvent[]
+  aiUsage             AiUsageBucket[]
+
+  @@index([managerId])
+  @@index([countryCode, employmentStatus])
+  @@index([departmentId])
+}
+
+model RequestCategory {
+  id                  String           @id @default(uuid()) @db.Uuid
+  code                String           @unique
+  name                String           @db.VarChar(80)
+  defaultDepartmentId String           @db.Uuid
+  defaultDepartment   Department       @relation(fields: [defaultDepartmentId], references: [id], onDelete: Restrict)
+  requests            ServiceRequest[]
+}
+
+model ServiceRequest {
+  id          String          @id @default(uuid()) @db.Uuid
+  number      Int             @unique @default(autoincrement())
+  title       String          @db.VarChar(160)
+  description String          @db.VarChar(5000)
+  categoryId  String          @db.Uuid
+  category    RequestCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  priority    Priority
+  status      RequestStatus   @default(SUBMITTED)
+  requesterId String          @db.Uuid
+  requester   User            @relation("Requester", fields: [requesterId], references: [id], onDelete: Restrict)
+  assigneeId  String?         @db.Uuid
+  assignee    User?           @relation("Assignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  version     Int             @default(1)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+  resolvedAt  DateTime?       @db.Timestamptz(3)
+  closedAt    DateTime?       @db.Timestamptz(3)
+  comments    RequestComment[]
+  events      RequestEvent[]
+
+  @@index([requesterId, createdAt])
+  @@index([assigneeId, status])
+  @@index([status, categoryId])
+  @@index([priority])
+}
+
+model RequestComment {
+  id        String         @id @default(uuid()) @db.Uuid
+  requestId String         @db.Uuid
+  request   ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  authorId  String         @db.Uuid
+  author    User           @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  body      String         @db.VarChar(3000)
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([requestId, createdAt])
+}
+
+model RequestEvent {
+  id                 String           @id @default(uuid()) @db.Uuid
+  requestId          String           @db.Uuid
+  request            ServiceRequest   @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  actorId            String           @db.Uuid
+  actor              User             @relation("EventActor", fields: [actorId], references: [id], onDelete: Restrict)
+  kind               RequestEventKind
+  fromStatus         RequestStatus?
+  toStatus           RequestStatus
+  previousAssigneeId String?          @db.Uuid
+  previousAssignee   User?            @relation("EventPrevAssignee", fields: [previousAssigneeId], references: [id], onDelete: Restrict)
+  newAssigneeId      String?          @db.Uuid
+  newAssignee        User?            @relation("EventNewAssignee", fields: [newAssigneeId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@index([requestId, createdAt])
+}
+
+model OnboardingTemplate {
+  id          String         @id @default(uuid()) @db.Uuid
+  name        String         @db.VarChar(120)
+  description String         @db.VarChar(2000)
+  isActive    Boolean        @default(true)
+  version     Int            @default(1)
+  createdById String         @db.Uuid
+  createdBy   User           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime       @updatedAt @db.Timestamptz(3)
+  tasks       TemplateTask[]
+  onboardings Onboarding[]
+}
+
+model TemplateTask {
+  id            String               @id @default(uuid()) @db.Uuid
+  templateId    String               @db.Uuid
+  template      OnboardingTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  key           String               @db.VarChar(50)
+  title         String               @db.VarChar(160)
+  description   String               @db.VarChar(3000)
+  departmentId  String               @db.Uuid
+  department    Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  dueDay        Int
+  sortOrder     Int
+  prerequisites TemplateDependency[] @relation("TemplateDependent")
+  dependents    TemplateDependency[] @relation("TemplatePrerequisite")
+
+  @@unique([templateId, key])
+  @@unique([templateId, sortOrder])
+  @@index([templateId, sortOrder])
+}
+
+model TemplateDependency {
+  taskId             String       @db.Uuid
+  task               TemplateTask @relation("TemplateDependent", fields: [taskId], references: [id], onDelete: Cascade)
+  prerequisiteTaskId String       @db.Uuid
+  prerequisiteTask   TemplateTask @relation("TemplatePrerequisite", fields: [prerequisiteTaskId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, prerequisiteTaskId])
+  @@index([prerequisiteTaskId])
+}
+
+model Onboarding {
+  id              String             @id @default(uuid()) @db.Uuid
+  employeeId      String             @unique @db.Uuid
+  employee        User               @relation("OnboardingEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  templateId      String             @db.Uuid
+  template        OnboardingTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  templateVersion Int
+  templateName    String             @db.VarChar(120)
+  startDate       DateTime           @db.Date
+  timezone        String
+  assignedById    String             @db.Uuid
+  assignedBy      User               @relation("OnboardingAssigner", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt      DateTime           @default(now()) @db.Timestamptz(3)
+  completedAt     DateTime?          @db.Timestamptz(3)
+  tasks           OnboardingTask[]
+}
+
+model OnboardingTask {
+  id            String           @id @default(uuid()) @db.Uuid
+  onboardingId  String           @db.Uuid
+  onboarding    Onboarding       @relation(fields: [onboardingId], references: [id], onDelete: Restrict)
+  sourceTaskKey String           @db.VarChar(50)
+  title         String           @db.VarChar(160)
+  description   String           @db.VarChar(3000)
+  departmentId  String           @db.Uuid
+  department    Department       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  ownerId       String           @db.Uuid
+  owner         User             @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  dueDay        Int
+  dueDate       DateTime         @db.Date
+  status        TaskStatus       @default(NOT_STARTED)
+  sortOrder     Int
+  version       Int              @default(1)
+  startedAt     DateTime?        @db.Timestamptz(3)
+  completedAt   DateTime?        @db.Timestamptz(3)
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
+  prerequisites TaskDependency[] @relation("TaskDependent")
+  dependents    TaskDependency[] @relation("TaskPrerequisite")
+  events        TaskEvent[]
+
+  @@unique([onboardingId, sourceTaskKey])
+  @@index([ownerId, status])
+  @@index([onboardingId, status])
+  @@index([dueDate, status])
+}
+
+model TaskDependency {
+  taskId             String         @db.Uuid
+  task               OnboardingTask @relation("TaskDependent", fields: [taskId], references: [id], onDelete: Restrict)
+  prerequisiteTaskId String         @db.Uuid
+  prerequisiteTask   OnboardingTask @relation("TaskPrerequisite", fields: [prerequisiteTaskId], references: [id], onDelete: Restrict)
+
+  @@id([taskId, prerequisiteTaskId])
+  @@index([prerequisiteTaskId])
+}
+
+model TaskEvent {
+  id         String         @id @default(uuid()) @db.Uuid
+  taskId     String         @db.Uuid
+  task       OnboardingTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  actorId    String         @db.Uuid
+  actor      User           @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  fromStatus TaskStatus
+  toStatus   TaskStatus
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([taskId, createdAt])
+}
+
+model LoginThrottle {
+  keyHash         String   @id
+  windowStartedAt DateTime @db.Timestamptz(3)
+  attemptCount    Int
+  expiresAt       DateTime @db.Timestamptz(3)
+
+  @@index([expiresAt])
+}
+
+model AiUsageBucket {
+  userId      String   @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  windowStart DateTime @db.Timestamptz(3)
+  count       Int
+
+  @@id([userId, windowStart])
+}
