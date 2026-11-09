@@ -56,4 +56,6 @@ Alternative: the env file also supports `AI_PROVIDER=openai` and `OPENAI_MODEL=g
 
 When `package-lock.json` is unchanged since the running release, a slim bundle (standalone output without `node_modules`, about 1.4 MB instead of 56 MB) can be shipped and the previous release's `app/node_modules` copied in on the VPS (`cp -a <prev>/app/node_modules <new>/app/`). Used for 236efde after the full bundle timed out in transfer.
 
-Logs: `journalctl -u peopleops -f`. Rollback: point `/opt/peopleops/current` at the previous release and restart.
+Security headers: the app sets a per-request nonce Content-Security-Policy and, when `APP_URL` is https, `Strict-Transport-Security` (src/proxy.ts); nginx has `server_tokens off` in both peopleops server blocks (2026-11-10; backups of the vhost in `/root/backups/nginx-peopleops-*.conf`).
+
+Logs: `journalctl -u peopleops -f` (browser-side errors appear as `"event":"client.error"` lines). Rollback: point `/opt/peopleops/current` at the previous release and restart.
