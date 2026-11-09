@@ -32,7 +32,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: SP 
   ];
   const params = {
     scope: sp(raw.scope) ?? defaultScope, status: sp(raw.status), categoryId: sp(raw.categoryId),
-    priority: sp(raw.priority), countryCode: sp(raw.countryCode), q: sp(raw.q), insight: sp(raw.insight), resolved: sp(raw.resolved), sort: sp(raw.sort), page: sp(raw.page),
+    priority: sp(raw.priority), countryCode: sp(raw.countryCode), q: sp(raw.q), insight: sp(raw.insight), resolved: sp(raw.resolved), stalled: sp(raw.stalled), sort: sp(raw.sort), page: sp(raw.page),
   };
   const parsed = listRequestsQuery.safeParse(Object.fromEntries(Object.entries(params).filter(([, v]) => v)));
   const [categories, result] = await Promise.all([
@@ -45,7 +45,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: SP 
     return u.toString();
   };
   const from = qs({ page: params.page });
-  const activeFilters = [params.status, params.categoryId, params.priority, params.countryCode, params.q, params.insight, params.resolved].filter(Boolean).length;
+  const activeFilters = [params.status, params.categoryId, params.priority, params.countryCode, params.q, params.insight, params.resolved, params.stalled].filter(Boolean).length;
 
   return (
     <>
@@ -82,10 +82,17 @@ export default async function RequestsPage({ searchParams }: { searchParams: SP 
         </FilterBanner>
       ) : null}
 
+      {params.stalled === "5-days" ? (
+        <FilterBanner clearHref={`/requests?${qs({ stalled: undefined })}`}>
+          <strong>No update in 5 days or more:</strong> assigned or in-progress requests that nobody has changed for at least 5 days.
+        </FilterBanner>
+      ) : null}
+
       <form className="mb-3 flex flex-wrap items-end gap-2" method="get" aria-label="Filter requests">
         <input type="hidden" name="scope" value={params.scope} />
         {params.insight ? <input type="hidden" name="insight" value={params.insight} /> : null}
         {params.resolved ? <input type="hidden" name="resolved" value={params.resolved} /> : null}
+        {params.stalled ? <input type="hidden" name="stalled" value={params.stalled} /> : null}
         {params.sort ? <input type="hidden" name="sort" value={params.sort} /> : null}
         <label className="min-w-[14rem] flex-1 text-sm">
           <span className="sr-only">Search</span>

@@ -19,7 +19,7 @@ test("request lifecycle with AI routing (draft suggestion + assigner suggestion)
   const title = `E2E monitor flicker ${Date.now()}`;
   await signIn(page, "employee.my@example.com");
   await page.getByRole("complementary", { name: "Main navigation" }).getByRole("link", { name: "Requests", exact: true }).click();
-  await page.getByRole("link", { name: "New request" }).click();
+  await page.getByRole("link", { name: "New request" }).first().click();
   await page.getByLabel("Title").fill(title);
   await page.getByLabel("Description").fill("My external monitor flickers every few seconds since this morning.");
   await page.getByRole("button", { name: "Suggest routing" }).click();
@@ -90,7 +90,7 @@ test("IT owner completes a prerequisite in My Work and the dependent task unbloc
 
 test("HR creates a template in the editor; a dependency loop is flagged and rejected", async ({ page }) => {
   await signIn(page, "hr.admin@example.com");
-  await page.getByRole("link", { name: "Templates" }).click();
+  await page.getByRole("link", { name: "Templates" }).first().click();
   await page.getByRole("link", { name: "New template" }).click();
   await page.getByLabel("Name").fill("E2E template");
   await page.getByRole("button", { name: "Add task" }).click();
@@ -135,6 +135,6 @@ test("U01: key screens fit a 390px viewport without horizontal scrolling", async
     expect(overflow, path).toBeLessThanOrEqual(0);
   }
   await page.getByRole("button", { name: "Open menu" }).click();
-  await expect(page.getByRole("link", { name: "Templates" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Templates" }).first()).toBeVisible();
   await ctx.close();
 });

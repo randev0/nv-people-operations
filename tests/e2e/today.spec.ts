@@ -178,7 +178,7 @@ test("HR bulk-assigns two requests after Select; selection count and bar appear 
 
 test("Overdue figure opens the overdue task list with the same count; filters narrow it; employees are refused", async ({ page }) => {
   await signIn(page, "hr.admin@example.com");
-  const card = page.getByRole("link", { name: /^Overdue tasks/ });
+  const card = page.getByRole("link", { name: /^Overdue tasks/ }).first();
   const n = Number(await card.locator("[data-value]").textContent());
   await card.click();
   await expect(page).toHaveURL(/\/onboarding\/overdue$/);
@@ -258,4 +258,31 @@ test("nothing to act on: caught-up state with onward links; employees see no rep
   await page.goto("/dashboard?tab=insights");
   await expect(page.getByText("You're all caught up.")).toBeVisible();
   await expect(page.getByRole("region", { name: "Open requests by status" })).toHaveCount(0);
+});
+
+test("Up next: each step's number matches the records it opens; shortcuts for every role", async ({ page }) => {
+  await signIn(page, "hr.admin@example.com");
+  const next = page.getByRole("region", { name: "Up next" });
+  await expect(next.getByRole("listitem").first()).toBeVisible();
+  expect(await next.getByRole("listitem").count()).toBeLessThanOrEqual(3);
+  for (const [re, url] of [[/^Check on (\d+) stalled requests?/, /stalled=5-days/], [/^Close (\d+) resolved requests?/, /status=RESOLVED/]] as const) {
+    await page.goto("/dashboard");
+    const step = next.getByRole("link", { name: re });
+    if ((await step.count()) === 0) continue; // zero-count steps are left out
+    const n = Number((await step.innerText()).match(re)![1]);
+    await step.click();
+    await expect(page).toHaveURL(url);
+    await expect(page.getByText(`${n} request${n === 1 ? "" : "s"}`, { exact: true })).toBeVisible();
+  }
+  await page.goto("/dashboard");
+  await next.getByRole("link", { name: /^Review this week's numbers/ }).click();
+  await expect(page).toHaveURL(/tab=insights/);
+  await expect(page.getByRole("navigation", { name: "Shortcuts" }).getByRole("link")).toHaveCount(0); // Today only
+  await page.goto("/dashboard");
+  await expect(page.getByRole("navigation", { name: "Shortcuts" }).getByRole("link", { name: "Assign checklist" })).toHaveAttribute("href", "/onboarding/assign");
+
+  await page.context().clearCookies();
+  await signIn(page, "employee.cy@example.com");
+  await expect(next.getByRole("link", { name: /^Need something\? Raise a request/ })).toHaveAttribute("href", "/requests/new");
+  await expect(page.getByRole("navigation", { name: "Shortcuts" }).getByRole("link", { name: "Templates" })).toHaveCount(0);
 });

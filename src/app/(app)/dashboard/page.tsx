@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { AlarmClock, ArrowRight, Hourglass, Inbox, UserPlus, type LucideIcon } from "lucide-react";
+import { AlarmClock, ArrowRight, BarChart3, CheckCheck, ClipboardList, FilePlus2, Hourglass, Inbox, ListChecks, Timer, UserPlus, Users, type LucideIcon } from "lucide-react";
 import { requireUser } from "@/server/auth/current-user";
 import { isHrAdmin, isManager } from "@/server/auth/permissions";
 import { myDashboard, orgDashboard, overdueToChase, todayInsight } from "@/server/dashboard/service";
 import { TIER_LABEL, workQueue, type WorkItem } from "@/server/dashboard/work-queue";
 import { getOwnOnboardingId, listOnboardings } from "@/server/onboarding/service";
 import { sp } from "@/server/page";
+import { listRequests } from "@/server/requests/service";
+import { listRequestsQuery } from "@/server/requests/schemas";
 import { Button } from "@/components/ui/button";
 import { CompactGreeting } from "@/components/dashboard/greeting";
 import { ManagerAtAGlance, OrgAtAGlance } from "@/components/dashboard/at-a-glance";
@@ -135,17 +137,115 @@ function EquipmentCard({ insight }: { insight: Insight }) {
   );
 }
 
+type Step = { title: string; why: string; href: string; icon: LucideIcon; tone: Tone };
+type Shortcut = { label: string; href: string; icon: LucideIcon };
+
+const countRequests = async (me: Me, q: Record<string, string>) =>
+  (await listRequests(me, listRequestsQuery.parse({ ...q, pageSize: "1" }))).meta.total;
+
+/**
+ * "Up next": what to do once the list above is handled, so Today never ends at a dead
+ * end. Live counts with the exact filtered records behind each (same list predicates);
+ * zero-count steps are left out and a standing step fills in, then everyday shortcuts.
+ */
+async function upNext(me: Me, own: string | null): Promise<{ steps: Step[]; shortcuts: Shortcut[] }> {
+  const hr = isHrAdmin(me);
+  const mgr = isManager(me);
+  if (hr || mgr) {
+    const scope = hr ? "all" : "team";
+    const [stalled, resolved] = await Promise.all([
+      countRequests(me, { scope, stalled: "5-days" }),
+      countRequests(me, { scope, status: "RESOLVED" }),
+    ]);
+    const steps: Step[] = [];
+    if (stalled)
+      steps.push({ title: `Check on ${plural(stalled, "stalled request")}`, why: "Assigned, but no update in 5+ days", href: `/requests?scope=${scope}&stalled=5-days`, icon: Timer, tone: "amber" });
+    if (resolved)
+      steps.push({ title: `Close ${plural(resolved, "resolved request")}`, why: "Fixed, waiting for confirmation", href: `/requests?scope=${scope}&status=RESOLVED`, icon: CheckCheck, tone: "cyan" });
+    steps.push({ title: "Review this week's numbers", why: hr ? "Requests, headcount, onboarding" : "Your team's overdue and progress", href: "/dashboard?tab=insights", icon: BarChart3, tone: "violet" });
+    if (steps.length < 3 && hr) steps.push({ title: "Start onboarding for a new hire", why: "Pick a template; deadlines are set per task", href: "/onboarding/assign", icon: UserPlus, tone: "violet" });
+    const shortcuts: Shortcut[] = hr
+      ? [
+          { label: "New request", href: "/requests/new", icon: FilePlus2 },
+          { label: "Assign checklist", href: "/onboarding/assign", icon: UserPlus },
+          { label: "Overdue tasks", href: "/onboarding/overdue", icon: AlarmClock },
+          { label: "Templates", href: "/templates", icon: ClipboardList },
+          { label: "Employees", href: "/employees", icon: Users },
+        ]
+      : [
+          { label: "New request", href: "/requests/new", icon: FilePlus2 },
+          { label: "Team requests", href: "/requests?scope=team&status=OPEN", icon: Inbox },
+          { label: "Team onboarding", href: "/onboarding", icon: UserPlus },
+          { label: "My work", href: "/my-work", icon: ListChecks },
+        ];
+    return { steps: steps.slice(0, 3), shortcuts };
+  }
+  const open = await countRequests(me, { scope: "mine", status: "OPEN" });
+  const steps: Step[] = [];
+  if (open) steps.push({ title: `Follow ${plural(open, "open request")}`, why: "See who is handling each and add details", href: "/requests?scope=mine&status=OPEN", icon: Inbox, tone: "violet" });
+  if (own) steps.push({ title: "Continue your onboarding", why: "Your checklist, with what is due next", href: `/onboarding/${own}`, icon: UserPlus, tone: "cyan" });
+  steps.push({ title: "Need something? Raise a request", why: "IT equipment, software access, HR questions and more", href: "/requests/new", icon: FilePlus2, tone: "violet" });
+  return {
+    steps: steps.slice(0, 3),
+    shortcuts: [
+      { label: "My requests", href: "/requests", icon: Inbox },
+      { label: "My work", href: "/my-work", icon: ListChecks },
+      { label: "New request", href: "/requests/new", icon: FilePlus2 },
+    ],
+  };
+}
+
+function UpNext({ steps, shortcuts }: { steps: Step[]; shortcuts: Shortcut[] }) {
+  return (
+    <section aria-labelledby="next-h" className="mt-8">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="next-h" className="text-lg font-semibold tracking-[-0.02em]">Up next</h2>
+        <p className="text-xs text-muted-foreground">Once the list above is handled</p>
+      </div>
+      <ul className="grid gap-3 sm:grid-cols-3">
+        {steps.map((st) => {
+          const t = TONE[st.tone];
+          return (
+            <li key={st.href}>
+              <Link href={st.href} className="surface surface-hover group flex h-full items-start gap-3 px-4 py-3.5">
+                <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg", t.chip)} aria-hidden>
+                  <st.icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium">{st.title}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{st.why}</span>
+                </span>
+                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-link" aria-hidden />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      <nav aria-label="Shortcuts" className="mt-4 flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-xs text-muted-foreground">Go to</span>
+        {shortcuts.map((c) => (
+          <Link key={c.href} href={c.href} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground">
+            <c.icon className="h-3.5 w-3.5" aria-hidden /> {c.label}
+          </Link>
+        ))}
+      </nav>
+    </section>
+  );
+}
+
 async function Today({ me, now, list }: { me: Me; now: Date; list?: string }) {
   const hr = isHrAdmin(me);
   const mgr = isManager(me);
-  const [queue, chase, insight, own, org, mine, active] = await Promise.all([
+  const ownP = getOwnOnboardingId(me.id);
+  const [queue, chase, insight, own, org, mine, active, next] = await Promise.all([
     workQueue(me, now),
     overdueToChase(me, now),
     todayInsight(me, now),
-    getOwnOnboardingId(me.id),
+    ownP,
     hr ? orgDashboard(me) : Promise.resolve(null),
     hr ? Promise.resolve(null) : myDashboard(me),
     hr ? listOnboardings(me, { page: 1, pageSize: 100, progress: "active" }) : Promise.resolve({ data: [] as never[] }),
+    ownP.then((id) => upNext(me, id)),
   ]);
   const toAssign = queue.filter(isAssign);
   const myWork = queue.filter((i) => !isAssign(i));
@@ -248,6 +348,7 @@ async function Today({ me, now, list }: { me: Me; now: Date; list?: string }) {
       </section>
 
       <EquipmentCard insight={insight} />
+      <UpNext {...next} />
     </>
   );
 }

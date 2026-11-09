@@ -20,7 +20,7 @@ test.describe.serial("presentation verification flows", () => {
   test("1 · employee submits a software-access request and finds its status afterwards", async ({ page }) => {
     await signIn(page, "employee.my@example.com");
     await page.getByRole("complementary", { name: "Main navigation" }).getByRole("link", { name: "Requests", exact: true }).click();
-    await page.getByRole("link", { name: "New request" }).click();
+    await page.getByRole("link", { name: "New request" }).first().click();
     await page.getByLabel("Title").fill(TITLE);
     await page.getByLabel("Description").fill("I need a licence for the design tool to prepare onboarding slides for my team this week.");
     await page.getByLabel("Category").selectOption({ label: "Software access" });
@@ -44,7 +44,7 @@ test.describe.serial("presentation verification flows", () => {
     await expect(assignTab).toHaveAttribute("aria-selected", "true");
     await page.getByRole("button", { name: "Select", exact: true }).click(); // selection mode lists every assignable request
     await expect(page.getByRole("checkbox", { name: new RegExp(TITLE) })).toBeVisible();
-    await page.getByRole("link", { name: /^Unassigned/ }).click();
+    await page.getByRole("link", { name: /^Unassigned/ }).first().click();
     await expect(page).toHaveURL(/scope=team.*status=SUBMITTED|status=SUBMITTED.*scope=team/);
     await page.getByRole("row", { name: new RegExp(TITLE) }).getByRole("link", { name: TITLE }).click();
     await expect(page.getByRole("heading", { name: new RegExp(TITLE) })).toBeVisible();

@@ -145,3 +145,10 @@
 ## 2026-11-10 — Equipment card restored on Today
 - Feedback: the one-line equipment sentence was less clear than the earlier card. Restored the earlier card exactly (holo edge, heading "IT equipment for new hires", "5 people who joined in the last 60 days have 5 open IT equipment requests; the oldest was opened 15 days ago.", outline "Review requests" button), 340 px wide as before, below the work list. Tests switched back to the card's wording. e2e 20/20.
 - Follow-up: the 340 px card looked stranded in the single column, so it now spans the column width (heading and sentence on the left, Review requests on the right); on phones it stacks as before. Same style. e2e 20/20.
+
+## 2026-11-10 — "Up next" so Today never ends with "that's it"
+- Feedback: after the equipment card the page simply stopped; it should guide the user to what to do or where to go next.
+- Added **Up next** below the card: up to three step cards, verb-first with a live count and one reason line, each opening its exact records, then a "Go to" row of role-specific shortcuts. HR/managers: "Check on N stalled requests" (assigned or in progress, no change for 5+ days; new request-list filter `stalled=5-days` with its own banner), "Close N resolved requests" (`status=RESOLVED`), "Review this week's numbers" (Insights); zero-count steps drop out and HR gets "Start onboarding for a new hire" as a filler. Employees: follow their open requests, continue their checklist, raise a request.
+- Considered "tasks due in the next 7 days" and "new hires starting soon": both are 0 in the seeded data and have no list page yet, so they were not added.
+- The step counts run in the same parallel batch as the rest of Today (a first attempt awaited them afterwards and slowed the page's first paint).
+- Tests: new e2e checks each step's number against the list it opens, the Insights link, and that shortcuts are role-appropriate; four selectors gained `.first()` because shortcuts now repeat sidebar link names. Unit 36/36, integration 27/27, e2e 21/21 twice.

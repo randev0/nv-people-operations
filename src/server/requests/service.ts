@@ -30,12 +30,16 @@ export function allowedActionsFor(actor: Actor, r: RequestRow): RequestAction[] 
 
 const dto = (actor: Actor, r: RequestRow): RequestDTO => toRequestDTO(r, allowedActionsFor(actor, r));
 
+/** Days without any change after which an assigned or in-progress request counts as stalled. */
+export const STALLED_DAYS = 5;
+
 export async function listRequests(actor: Actor, q: ListRequestsQuery) {
   const scope = requestListScopeWhere(actor, q.scope);
   if (!scope) throw forbidden(`The "${q.scope}" view is not available for your role.`);
   const filters: Prisma.ServiceRequestWhereInput[] = [requestReadScopeWhere(actor), scope];
   if (q.status === "OPEN") filters.push({ status: { in: ["SUBMITTED", "ASSIGNED", "IN_PROGRESS"] } });
   else if (q.status) filters.push({ status: q.status });
+  if (q.stalled === "5-days") filters.push({ status: { in: ["ASSIGNED", "IN_PROGRESS"] }, updatedAt: { lte: new Date(Date.now() - STALLED_DAYS * 86_400_000) } });
   if (q.resolved === "last-7-days") filters.push({ resolvedAt: { gt: new Date(Date.now() - 7 * 86_400_000), lte: new Date() } });
   if (q.categoryId) filters.push({ categoryId: q.categoryId });
   if (q.priority) filters.push({ priority: q.priority });
