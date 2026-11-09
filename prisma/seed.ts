@@ -8,8 +8,8 @@ import { PrismaClient, type Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { addCalendarDays, dueDateFor, parseDateOnly } from "../src/server/onboarding/dates";
 import {
-  CATEGORIES, COMMENT_SCRIPTS, COUNTRIES, DEPARTMENTS, ENGINEERING_TEMPLATE, ONBOARDING_PLAN, REQUEST_TEXTS,
-  STANDARD_TEMPLATE, buildUsers, fixtureId, type TemplateTaskFixture, type UserFixture,
+  CATEGORIES, COUNTRIES, DEPARTMENTS, ENGINEERING_TEMPLATE, ONBOARDING_PLAN, REQUEST_PLAN,
+  STANDARD_TEMPLATE, buildUsers, fixtureId, type RequesterSpec, type TemplateTaskFixture, type UserFixture,
 } from "./fixtures";
 
 const db = new PrismaClient();
@@ -23,6 +23,14 @@ function referenceDate(): string {
 /** Instant at a given UTC hour on (ref - daysAgo). */
 function at(ref: string, daysAgo: number, hour: number, minute = 0): Date {
   return new Date(`${addCalendarDays(ref, -daysAgo)}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00Z`);
+}
+
+/** Standard UTC offsets in minutes (no office observes DST in the seed's November window except Nicosia, which is then on UTC+2). */
+const UTC_OFFSET_MIN: Record<string, number> = { MY: 480, BD: 360, LK: 330, CY: 120 };
+
+/** Instant at a local office hour on (ref - daysAgo), so seeded activity happens during working hours. */
+function atLocal(ref: string, daysAgo: number, country: string, hour: number, minute = 0): Date {
+  return new Date(at(ref, daysAgo, hour, minute).getTime() - UTC_OFFSET_MIN[country] * 60_000);
 }
 
 async function main() {
@@ -117,8 +125,10 @@ async function main() {
   const ownerFor = (hire: UserFixture, dept: string): string => {
     if (dept === "Manager") return uid(hire.managerKey!);
     if (dept === "IT" && hire.country === "MY") return uid(users.find((u) => u.email === "it.owner@example.com")!.key);
+    // A settled colleague in the hire's office: not a manager, not another new hire.
     const pool = usersOf((u) => u.dept === dept && u.key !== hire.key && u.role !== "HR_ADMIN");
-    const local = pool.find((u) => u.country === hire.country) ?? pool[0];
+    const local =
+      pool.find((u) => u.country === hire.country && u.role === "EMPLOYEE" && !u.recentHire) ?? pool.find((u) => u.country === hire.country) ?? pool[0];
     if (dept === "People & Culture" && !local) return hrId;
     return uid(local.key);
   };
@@ -140,8 +150,8 @@ async function main() {
         data: {
           id: onboardingId, employeeId: uid(hire.key), templateId: templateRow[tplKey].id, templateVersion: templateRow[tplKey].version,
           templateName: templateRow[tplKey].name, startDate: parseDateOnly(startDate), timezone: tz, assignedById: hrId,
-          assignedAt: at(ref, hire.joinedDaysAgo + 3, 3),
-          completedAt: incomplete.size === 0 ? at(ref, hire.joinedDaysAgo - 29, 9) : null,
+          assignedAt: atLocal(ref, hire.joinedDaysAgo + 3, hire.country, 11),
+          completedAt: incomplete.size === 0 ? atLocal(ref, hire.joinedDaysAgo - 29, hire.country, 17) : null,
         },
       });
       for (const [i, k] of tpl.tasks.entries()) {
@@ -150,15 +160,15 @@ async function main() {
         const inProgress = !done && plan.inProgress.includes(k.key) && k.prereqs.every((p) => !incomplete.has(p));
         const ownerId = ownerFor(hire, k.dept);
         const dueOffset = hire.joinedDaysAgo - (k.dueDay - 1);
-        const startedAt = done || inProgress ? at(ref, dueOffset + 1, 4, i) : null;
-        const completedAt = done ? at(ref, dueOffset, 6, i) : null;
+        const startedAt = done || inProgress ? atLocal(ref, dueOffset + 1, hire.country, 10, i * 4) : null;
+        const completedAt = done ? atLocal(ref, dueOffset, hire.country, 14, i * 4) : null;
         await tx.onboardingTask.create({
           data: {
             id: taskId(k.key), onboardingId, sourceTaskKey: k.key, title: k.title, description: k.description,
             departmentId: deptId[k.dept], ownerId, dueDay: k.dueDay, dueDate: parseDateOnly(due), sortOrder: i,
             status: done ? "COMPLETED" : inProgress ? "IN_PROGRESS" : "NOT_STARTED",
             version: done ? 3 : inProgress ? 2 : 1, startedAt, completedAt,
-            updatedAt: completedAt ?? startedAt ?? at(ref, hire.joinedDaysAgo + 3, 3),
+            updatedAt: completedAt ?? startedAt ?? atLocal(ref, hire.joinedDaysAgo + 3, hire.country, 11),
           },
         });
         const events: Prisma.TaskEventCreateManyInput[] = [];
@@ -177,7 +187,6 @@ async function main() {
   // one: most open requests are days old, a few have gone stale, IT carries the most
   // open work, and resolved/closed history is spread over the last six weeks.
   const STATUSES = ["SUBMITTED", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "CLOSED"] as const;
-  const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
   type Cat = (typeof CATEGORIES)[number]["code"];
   const IT: Cat = "IT_EQUIPMENT", SW: Cat = "SOFTWARE_ACCESS", HR: Cat = "HR_QUERY", FAC: Cat = "FACILITIES", OT: Cat = "OTHER";
   // Index i → category. Open (0–23): IT 7, software 6, HR 5, facilities 4, other 2. Done (24–39): the rest.
@@ -189,51 +198,65 @@ async function main() {
     IT, OT, FAC, HR, OT, SW, FAC, OT, /* closed */
   ];
   // Days before the reference date: created, resolved, closed. Nothing is stamped on the reference day itself.
-  const CREATED_AGO = [3, 1, 6, 2, 1, 4, 2, 11, 2, 9, 3, 5, 12, 4, 6, 1, 6, 15, 4, 9, 3, 7, 10, 20, 5, 8, 12, 4, 15, 9, 18, 6, 14, 20, 25, 11, 30, 18, 38, 42];
-  const RESOLVED_AGO: Record<number, number> = { 24: 1, 25: 2, 26: 3, 27: 1, 28: 5, 29: 4, 30: 9, 31: 2, 32: 9, 33: 15, 34: 19, 35: 7, 36: 24, 37: 12, 38: 30, 39: 36 };
-  const CLOSED_AGO: Record<number, number> = { 32: 7, 33: 12, 34: 16, 35: 5, 36: 21, 37: 10, 38: 27, 39: 33 };
-  // Open IT equipment requests from recent hires (employee.my first) so the insight has real rows.
-  const HIRE_IT_SLOTS = [0, 2, 9, 12, 17];
-  const employees = usersOf((u) => u.role === "EMPLOYEE" && !u.recentHire && u.status !== "ON_NOTICE");
-  const recentHires = orderedHires; // employee.my first
+  // Urgent requests are raised recently or handled within a day or two; routine ones wait longer.
+  const CREATED_AGO = [3, 1, 6, 2, 4, 1, 2, 11, 2, 9, 3, 5, 12, 4, 6, 1, 6, 15, 4, 1, 3, 7, 10, 20, 5, 8, 4, 4, 15, 9, 18, 6, 14, 20, 25, 11, 30, 18, 38, 42];
+  const RESOLVED_AGO: Record<number, number> = { 24: 1, 25: 2, 26: 3, 27: 1, 28: 5, 29: 4, 30: 9, 31: 2, 32: 13, 33: 15, 34: 24, 35: 9, 36: 24, 37: 18, 38: 30, 39: 36 };
+  const CLOSED_AGO: Record<number, number> = { 32: 12, 33: 12, 34: 23, 35: 8, 36: 21, 37: 17, 38: 27, 39: 33 };
   const itOwner = users.find((u) => u.email === "it.owner@example.com")!;
-  const empCy = users.find((u) => u.email === "employee.cy@example.com")!;
-  const textIdx: Record<string, number> = {};
-  let commentThreads = 0; // threads created in this run (only fresh databases create requests)
+  const hrFor = (u: UserFixture) => (u.country === "MY" || u.country === "BD" ? "hr-1" : "hr-2");
+  // Requesters: recent hires by onboarding order (employee.my first), named demo accounts,
+  // or settled staff matching the plan; a person raises at most two seeded requests.
+  const raised = new Map<string, number>();
+  const pickRequester = (spec: RequesterSpec, i: number): UserFixture => {
+    if ("hire" in spec) return orderedHires[spec.hire];
+    if ("email" in spec) return users.find((u) => u.email === spec.email)!;
+    const pool = usersOf(
+      (u) =>
+        u.role === (spec.role ?? "EMPLOYEE") && !u.recentHire && u.status !== "ON_NOTICE" &&
+        !["it.owner@example.com", "employee.cy@example.com", "employee.my@example.com"].includes(u.email) &&
+        (!spec.dept || u.dept === spec.dept) && (!spec.country || u.country === spec.country) && (!spec.status || u.status === spec.status),
+    );
+    if (!pool.length) throw new Error(`No requester for request ${i}: ${JSON.stringify(spec)}`);
+    const fresh = pool.filter((u) => (raised.get(u.key) ?? 0) < 1);
+    const pick = (fresh.length ? fresh : pool)[i % (fresh.length || pool.length)];
+    raised.set(pick.key, (raised.get(pick.key) ?? 0) + 1);
+    return pick;
+  };
 
   for (let i = 0; i < 40; i++) {
     const id = fixtureId(`req:${i}`);
     if (await db.serviceRequest.findUnique({ where: { id }, select: { id: true } })) continue;
     const status = STATUSES[Math.floor(i / 8)];
     const cat = CAT_PLAN[i];
-    const priority = PRIORITIES[i % 4];
-    const [title, description] = REQUEST_TEXTS[cat][(textIdx[cat] = (textIdx[cat] ?? -1) + 1)];
+    const plan = REQUEST_PLAN[i];
+    const { title, description, priority } = plan;
+    const requester = pickRequester(plan.requester, i);
 
-    let requester: UserFixture;
-    const hireSlot = HIRE_IT_SLOTS.indexOf(i);
-    if (hireSlot >= 0) requester = recentHires[hireSlot];
-    else if (i === 3 || i === 13) requester = empCy;
-    else requester = employees[(i * 7) % employees.length];
-
-    // Assignee: from the category's support department, MY IT requests go to it.owner.
+    // Assignee: the category's support team in the requester's own office (Malaysian IT
+    // work goes to it.owner); never the requester, never an HR admin.
     const supportDept = CATEGORIES.find((c) => c.code === cat)!.dept;
     let assignee: UserFixture | null = null;
     if (status !== "SUBMITTED") {
-      if (supportDept === "IT" && (i % 3 === 0 || requester.country === "MY") && requester.key !== itOwner.key) assignee = itOwner;
+      if (supportDept === "IT" && requester.country === "MY" && requester.key !== itOwner.key) assignee = itOwner;
       else {
-        const pool = usersOf((u) => u.dept === supportDept && u.key !== requester.key && u.role !== "HR_ADMIN");
-        assignee = pool.find((u) => u.country === requester.country) ?? pool[i % pool.length];
+        const pool = usersOf((u) => u.dept === supportDept && u.key !== requester.key && u.role !== "HR_ADMIN" && !u.recentHire);
+        const local = pool.filter((u) => u.country === requester.country && u.role === "EMPLOYEE");
+        assignee = local.length ? local[i % local.length] : (pool.find((u) => u.country === requester.country) ?? pool[i % pool.length]);
       }
     }
-    const assigner = requester.managerKey ? uid(requester.managerKey) : hrId;
+    // Triage: the requester's manager assigns IT and software requests; HR assigns the rest.
+    const assigner = supportDept === "IT" && requester.managerKey && requester.role === "EMPLOYEE" ? uid(requester.managerKey) : uid(hrFor(requester));
     const createdAgo = CREATED_AGO[i];
     const resolvedAgo = RESOLVED_AGO[i] ?? 0;
-    const created = at(ref, createdAgo, 1 + (i % 7), (i * 7) % 60);
-    const assignedAt = new Date(created.getTime() + 3 * 3_600_000);
+    // Local office hours: raised 09:00–13:59, triaged two hours later, work starts at 10:00
+    // (never before triage), resolved at 15:00, closed by the requester at 11:00.
+    const c = requester.country;
+    const created = atLocal(ref, createdAgo, c, 9 + (i % 5), (i * 7) % 60);
+    const assignedAt = new Date(created.getTime() + 2 * 3_600_000);
     const startedAgo = status === "IN_PROGRESS" ? Math.max(1, Math.floor(createdAgo * 0.6)) : Math.max(resolvedAgo, Math.floor((createdAgo + resolvedAgo) / 2));
-    const startedAt = at(ref, startedAgo, 13, i);
-    const resolvedAt = at(ref, resolvedAgo, 16, i);
-    const closedAt = at(ref, CLOSED_AGO[i] ?? 0, 18, i);
+    const startedAt = new Date(Math.max(atLocal(ref, startedAgo, c, 10, i).getTime(), assignedAt.getTime() + 30 * 60_000));
+    const resolvedAt = new Date(Math.max(atLocal(ref, resolvedAgo, c, 15, i).getTime(), startedAt.getTime() + 3 * 3_600_000));
+    const closedAt = atLocal(ref, CLOSED_AGO[i] ?? 0, c, 11, i);
     const stage = STATUSES.indexOf(status);
     const versions = 1 + stage; // one version bump per transition
 
@@ -245,16 +268,12 @@ async function main() {
     if (stage >= 3) events.push({ id: fixtureId(`re:${i}:resolved`), requestId: id, actorId: uid(assignee!.key), kind: "STATUS_CHANGED", fromStatus: "IN_PROGRESS", toStatus: "RESOLVED", createdAt: resolvedAt });
     if (stage >= 4) events.push({ id: fixtureId(`re:${i}:closed`), requestId: id, actorId: uid(requester.key), kind: "STATUS_CHANGED", fromStatus: "RESOLVED", toStatus: "CLOSED", createdAt: closedAt });
 
-    // Comment threads on eight requests that have an assignee (3 comments each).
-    const comments: Prisma.RequestCommentCreateManyInput[] = [];
-    if (assignee && commentThreads < 8 && i % 2 === 0) {
-      const script = COMMENT_SCRIPTS[commentThreads];
-      script.forEach((body, j) => {
-        const author = j === 1 ? requester : assignee!;
-        comments.push({ id: fixtureId(`rc:${i}:${j}`), requestId: id, authorId: uid(author.key), body, createdAt: new Date(assignedAt.getTime() + (j + 1) * 47 * 60_000) });
-      });
-      commentThreads++;
-    }
+    // The request's own conversation, timed against its lifecycle.
+    const anchor = { assigned: assignedAt, started: startedAt, resolved: resolvedAt };
+    const comments: Prisma.RequestCommentCreateManyInput[] = (plan.thread ?? []).map((c, j) => ({
+      id: fixtureId(`rc:${i}:${j}`), requestId: id, authorId: uid((c.by === "A" ? assignee! : requester).key), body: c.text,
+      createdAt: new Date(anchor[c.after].getTime() + c.min * 60_000),
+    }));
 
     await db.$transaction([
       db.serviceRequest.create({

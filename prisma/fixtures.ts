@@ -183,67 +183,216 @@ export type RequestFixture = {
   key: string; title: string; description: string; category: (typeof CATEGORIES)[number]["code"];
 };
 
-/** Request texts by category; eight per category. */
-export const REQUEST_TEXTS: Record<string, [string, string][]> = {
-  IT_EQUIPMENT: [
-    ["Laptop not delivered for first week", "I started recently and I am still using a shared machine. I need my own laptop to finish onboarding modules."],
-    ["Second monitor request", "My role involves reviewing large spreadsheets; a second monitor would help. Not urgent."],
-    ["Laptop battery drains within an hour", "Battery health shows 41%. I cannot attend meetings away from my desk."],
-    ["Headset for customer calls", "I need a headset with a microphone for daily calls with customers."],
-    ["Docking station not detecting display", "The dock at desk 4B does not output video since Monday. Tried two cables."],
-    ["Replacement keyboard", "Several keys on my keyboard stick. Requesting a replacement."],
-    ["Laptop for new contractor", "A contractor joins my team next week and needs a standard laptop."],
-    ["Webcam for interviews", "I run interviews remotely and the built-in camera is very poor quality."],
-  ],
-  SOFTWARE_ACCESS: [
-    ["Access to finance reporting tool", "I need read access to the monthly reporting workspace to prepare the budget review."],
-    ["Design tool licence", "Requesting a licence for the design tool to produce campaign assets."],
-    ["VPN access not working", "VPN rejects my credentials since the password change yesterday. Blocking remote work today."],
-    ["Repository write access", "I need write access to the payments service repository for my current ticket."],
-    ["Shared mailbox access", "Please add me to the recruitment shared mailbox."],
-    ["Analytics dashboard permissions", "I can open the dashboard but cannot see the regional filters."],
-    ["Password manager team vault", "Please add me to the Facilities team vault."],
-    ["Project tracker account", "I do not have an account on the project tracker yet."],
-  ],
-  HR_QUERY: [
-    ["Annual leave balance looks wrong", "My balance shows 6 days but I believe I should have 9 after carry-over."],
-    ["Probation review date", "Could you confirm when my probation review is scheduled?"],
-    ["Update emergency contact", "I need to change my emergency contact details."],
-    ["Parental leave policy question", "I would like to understand the parental leave policy for my country."],
-    ["Payslip clarification", "There is an allowance line on my payslip I do not recognise."],
-    ["Employment letter for visa", "I need an employment confirmation letter for a visa application next month."],
-    ["Training budget approval process", "How do I apply for the annual training budget?"],
-    ["Medical insurance enrolment", "My dependants are not showing on the insurance portal."],
-  ],
-  FACILITIES: [
-    ["Air conditioning too cold in meeting room 3", "Meeting room 3 stays at 17°C regardless of the thermostat setting."],
-    ["Desk chair broken", "The height adjustment on my chair no longer holds."],
-    ["Access card not opening level 5", "My access card works on the ground floor but not level 5."],
-    ["Leaking tap in pantry", "The pantry tap on level 2 has been leaking since this morning."],
-    ["Parking bay request", "Requesting a parking bay as I now commute by car."],
-    ["Whiteboard markers and supplies", "Meeting rooms on level 3 have no working markers."],
-    ["Light flickering above desk", "The ceiling light above row C flickers constantly."],
-    ["Locker allocation", "I would like a locker near the gym area."],
-  ],
-  OTHER: [
-    ["Team offsite venue suggestions", "Looking for guidance on approved venues for a team offsite next quarter."],
-    ["Business card printing", "Please arrange business cards with my new title."],
-    ["Volunteer day registration", "How can our team register for the company volunteer day?"],
-    ["Expense claim category unclear", "Which category should I use for a client lunch?"],
-    ["Company swag for event", "We need branded items for a university career fair."],
-    ["Translation of policy document", "Can the remote work policy be provided in Sinhala?"],
-    ["Mentoring programme sign-up", "I would like to join the mentoring programme as a mentee."],
-    ["Lost and found", "I left a black umbrella in meeting room 2 yesterday."],
-  ],
+/**
+ * Who raised a request: one of the recent hires (by onboarding order), a named demo
+ * account, or the first matching person in a department / country / status / role.
+ */
+export type RequesterSpec =
+  | { hire: number }
+  | { email: string }
+  | { dept?: Dept; country?: CC; status?: "ACTIVE" | "ON_PROBATION"; role?: "EMPLOYEE" | "MANAGER" };
+
+/** One comment: by the assignee (A) or the requester (R), minutes after a lifecycle anchor (negative = before it). */
+export type CommentLine = { by: "A" | "R"; after: "assigned" | "started" | "resolved"; min: number; text: string };
+
+export type RequestPlan = {
+  title: string;
+  description: string;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  requester: RequesterSpec;
+  thread?: CommentLine[];
 };
 
-export const COMMENT_SCRIPTS: string[][] = [
-  ["Thanks — I have picked this up and will check stock today.", "Stock arrives Thursday; I will reserve one for you.", "Great, thank you for the update."],
-  ["Can you confirm the exact error message?", "It says 'authentication failed (code 691)'.", "Thanks, resetting the token now — please try again in 10 minutes."],
-  ["Looking into it with the vendor.", "Vendor confirmed a replacement part is needed.", "Understood, please keep me posted."],
-  ["I have checked the records; there was a carry-over error.", "Thanks for checking so quickly.", "Corrected — the balance now shows 9 days."],
-  ["Technician scheduled for tomorrow morning.", "I will be at my desk from 9am.", "Fixed and tested, closing soon if all is well."],
-  ["Which application is affected exactly?", "Only the regional view in the analytics dashboard.", "Permissions updated for the regional group."],
-  ["Approved by your manager, proceeding.", "Do I need to collect it from IT?", "Yes, from the IT desk on level 2 after 2pm."],
-  ["Received, will reply after checking the policy.", "Thank you.", "Policy summary sent by email; the key points are in this thread too."],
+/**
+ * The 40 seeded requests, index-aligned with the seed's status blocks (8 each:
+ * submitted, assigned, in progress, resolved, closed) and category plan. Each one is
+ * written for its requester (department, country, tenure), its priority matches what it
+ * describes (10 per priority), and its comments follow the request's own stage:
+ * questions while assigned, progress while in progress, the fix before resolution and
+ * the requester's confirmation before closing.
+ */
+export const REQUEST_PLAN: RequestPlan[] = [
+  // ---- SUBMITTED (0–7): IT, SW, IT, HR, FAC, IT, SW, HR ----
+  { title: "Laptop handover still pending", priority: "HIGH", requester: { hire: 0 },
+    description: "IT prepared my laptop during my first week but I have not received it yet. I am still on a loaner that cannot run our build tools, so I cannot finish the engineering onboarding tasks." },
+  { title: "Locked out of payroll system before pay run", priority: "URGENT", requester: { dept: "Finance", country: "BD" },
+    description: "My payroll system account was locked after the password expiry this morning. This month's payroll has to be submitted by 5pm tomorrow." },
+  { title: "Second monitor for code reviews", priority: "LOW", requester: { hire: 1 },
+    description: "A second monitor would make side-by-side code reviews much easier. Not urgent; any standard 24-inch model is fine." },
+  { title: "Annual leave balance looks wrong", priority: "MEDIUM", requester: { email: "employee.cy@example.com" },
+    description: "My balance shows 6 days, but I carried over 3 days from last year, so I expected 9. Could you check the carry-over?" },
+  { title: "Meeting room 3 air conditioning too cold", priority: "MEDIUM", requester: { dept: "Marketing", country: "MY" },
+    description: "Meeting room 3 stays at about 17°C whatever the thermostat is set to. We have client workshops there this week." },
+  { title: "Laptop will not boot after update", priority: "URGENT", requester: { dept: "Finance", country: "MY" },
+    description: "After last night's update my laptop restarts in a loop and never reaches the sign-in screen. I cannot work at all today." },
+  { title: "Design tool licence for campaign assets", priority: "HIGH", requester: { dept: "Marketing", country: "LK" },
+    description: "I need a licence for the design tool to produce the assets for the campaign launching next Tuesday." },
+  { title: "Probation review date", priority: "MEDIUM", requester: { status: "ON_PROBATION" },
+    description: "My probation period ends next month. Could you confirm when my review is scheduled and who will run it?" },
+
+  // ---- ASSIGNED (8–15): SW, IT, FAC, HR, IT, OT, SW, FAC ----
+  { title: "VPN rejects my credentials after password change", priority: "URGENT", requester: { dept: "Engineering", country: "LK" },
+    description: "Since I changed my password yesterday the VPN rejects my sign-in. I am working from home today and cannot reach any internal system.",
+    thread: [
+      { by: "A", after: "assigned", min: 25, text: "Can you send the exact error message and the VPN client version?" },
+      { by: "R", after: "assigned", min: 40, text: "\"Authentication failed (code 691)\", client version 5.2. It started right after the password change." },
+    ] },
+  { title: "Headset for team calls", priority: "MEDIUM", requester: { hire: 2 },
+    description: "I have daily calls with the team in Malaysia and my laptop microphone picks up a lot of background noise. Could I get a headset?" },
+  { title: "Desk chair height adjustment broken", priority: "HIGH", requester: { dept: "Compliance", country: "CY" },
+    description: "The gas lift on my chair no longer holds its height and it sinks during the day. It is giving me back pain.",
+    thread: [
+      { by: "A", after: "assigned", min: 30, text: "I can swap the chair tomorrow morning. Which desk are you at?" },
+      { by: "R", after: "assigned", min: 55, text: "Desk 3.14, by the window. I am in from 9am." },
+    ] },
+  { title: "Update emergency contact", priority: "LOW", requester: { dept: "IT", country: "BD" },
+    description: "I need to change my emergency contact to my sister. Is there a form, or can you update it from this request?" },
+  { title: "Laptop not issued yet", priority: "URGENT", requester: { hire: 3 },
+    description: "I joined six weeks ago and still do not have a laptop. I am borrowing a colleague's machine between their meetings.",
+    thread: [
+      { by: "A", after: "assigned", min: 20, text: "Sorry for the delay. Your laptop order is held at customs; the supplier expects delivery on Thursday." },
+      { by: "R", after: "assigned", min: 45, text: "Thanks. Is there a loaner I could use until then?" },
+      { by: "A", after: "assigned", min: 70, text: "Yes. A loaner is ready at the IT desk on level 1. Please collect it today." },
+    ] },
+  { title: "Business cards with new title", priority: "LOW", requester: { email: "employee.cy@example.com" },
+    description: "I moved to Senior Accountant last month. Could you arrange 100 business cards with the new title?" },
+  { title: "Repository write access", priority: "HIGH", requester: { dept: "Engineering", country: "MY" },
+    description: "I need write access to the payments-service repository to push the fix for my current ticket. Read access works.",
+    thread: [
+      { by: "A", after: "assigned", min: 35, text: "Which ticket is this for? Write access to payments-service needs your manager's approval." },
+      { by: "R", after: "assigned", min: 60, text: "Ticket PAY-482. My manager approved it in this morning's stand-up; I have asked them to confirm here." },
+    ] },
+  { title: "Access card not opening level 5", priority: "HIGH", requester: { dept: "Engineering", country: "MY", status: "ACTIVE" },
+    description: "My access card opens the ground floor but not level 5, where my team sits. Reception has to let me in each morning." },
+
+  // ---- IN PROGRESS (16–23): HR, IT, SW, FAC, IT, SW, HR, OT ----
+  { title: "Parental leave entitlement", priority: "MEDIUM", requester: { dept: "IT", country: "LK" },
+    description: "We are expecting our first child in March. How much parental leave am I entitled to, and how much notice do I need to give?",
+    thread: [
+      { by: "A", after: "started", min: 30, text: "Congratulations! I am confirming the Sri Lanka entitlement and the notice period with the benefits team and will reply here." },
+      { by: "R", after: "started", min: 90, text: "Thank you, no rush this week." },
+    ] },
+  { title: "Sticky keys on issued laptop", priority: "MEDIUM", requester: { hire: 4 },
+    description: "Several keys on the built-in keyboard of the laptop I was issued stick or double-type, mostly E and R.",
+    thread: [
+      { by: "A", after: "started", min: 20, text: "I have ordered a replacement keyboard. In the meantime I can lend you an external one." },
+      { by: "R", after: "started", min: 50, text: "Yes please, that would help a lot." },
+      { by: "A", after: "started", min: 120, text: "External keyboard left on your desk. The replacement part arrives on Wednesday and the swap takes about 30 minutes." },
+    ] },
+  { title: "Recruitment shared mailbox access", priority: "HIGH", requester: { dept: "People & Culture", country: "LK" },
+    description: "Please add me to the recruitment shared mailbox. I am taking over graduate hiring from Monday.",
+    thread: [
+      { by: "A", after: "started", min: 40, text: "Access requested. The mailbox owner has to approve it; I have sent them a reminder." },
+    ] },
+  { title: "Leaking tap in level 2 pantry", priority: "URGENT", requester: { dept: "Finance", country: "CY" },
+    description: "The pantry tap on level 2 is leaking steadily and water is pooling on the floor.",
+    thread: [
+      { by: "A", after: "started", min: 15, text: "I have closed the valve under the sink for now. The plumber is booked for 2pm today." },
+      { by: "R", after: "started", min: 30, text: "Thanks, I have put a note on the pantry door." },
+    ] },
+  { title: "Laptop for contractor starting Monday", priority: "HIGH", requester: { role: "MANAGER", dept: "Finance", country: "CY" },
+    description: "A contractor joins my team on Monday for three months and needs a standard laptop and an account.",
+    thread: [
+      { by: "A", after: "started", min: 45, text: "A standard laptop is reserved. Default image, or does the contractor need the finance reporting add-in too?" },
+      { by: "R", after: "started", min: 80, text: "Default image plus the reporting add-in, please." },
+      { by: "A", after: "started", min: 150, text: "Noted. It will be ready at the IT desk on Friday afternoon." },
+    ] },
+  { title: "Analytics dashboard regional filters missing", priority: "HIGH", requester: { dept: "Marketing", country: "BD" },
+    description: "I can open the sales analytics dashboard but the regional filters are not shown, and I need them for Thursday's weekly report." },
+  { title: "Unexpected deduction on payslip", priority: "HIGH", requester: { dept: "Engineering", country: "BD" },
+    description: "My October payslip has a deduction labelled \"ADJ-02\" that I do not recognise. Could you explain it?",
+    thread: [
+      { by: "A", after: "started", min: 60, text: "ADJ-02 is the recovery of an overpaid allowance from August. I am checking the amount with payroll before confirming." },
+      { by: "R", after: "started", min: 95, text: "Thanks. I did not know about the overpayment; please send the details when you have them." },
+    ] },
+  { title: "Remote work policy in Sinhala", priority: "MEDIUM", requester: { dept: "Facilities", country: "LK" },
+    description: "Several of our facilities staff would find the remote work policy easier to follow in Sinhala. Can a translated copy be provided?" },
+
+  // ---- RESOLVED (24–31): OT, FAC, HR, OT, SW, FAC, OT, HR — fixed, waiting for the requester to close ----
+  { title: "Volunteer day registration", priority: "LOW", requester: { dept: "Engineering", country: "MY" },
+    description: "How can our team register for the company volunteer day next month?",
+    thread: [
+      { by: "A", after: "resolved", min: -30, text: "I have sent you the registration form. Each team registers once with a list of names, by the 20th." },
+    ] },
+  { title: "Parking bay request", priority: "LOW", requester: { dept: "Marketing", country: "MY" },
+    description: "I have started commuting by car. Could I be allocated a parking bay?",
+    thread: [
+      { by: "A", after: "resolved", min: -60, text: "Bay B2-17 is yours from Monday. Your parking pass is at reception." },
+    ] },
+  { title: "Employment letter for visa appointment", priority: "URGENT", requester: { dept: "Marketing", country: "MY" },
+    description: "My visa appointment is in two days and I need an employment confirmation letter that states my salary.",
+    thread: [
+      { by: "A", after: "started", min: 30, text: "Which embassy is it for, and should the letter be addressed to them?" },
+      { by: "R", after: "started", min: 50, text: "The German embassy in Kuala Lumpur. Yes, addressed to them please." },
+      { by: "A", after: "resolved", min: -10, text: "The signed letter is in your inbox. Good luck with the appointment!" },
+    ] },
+  { title: "Expense category for client lunch", priority: "LOW", requester: { dept: "Marketing", country: "LK" },
+    description: "Which expense category should I use for a lunch with a client?",
+    thread: [
+      { by: "A", after: "resolved", min: -20, text: "Use \"Client entertainment\" and add the client's company name in the notes." },
+    ] },
+  { title: "Facilities team vault in the password manager", priority: "MEDIUM", requester: { dept: "Facilities", country: "LK" },
+    description: "Please add me to the Facilities team vault so I can reach the building management system logins." },
+  { title: "Whiteboard markers and supplies on level 3", priority: "LOW", requester: { dept: "Compliance", country: "LK" },
+    description: "None of the markers in the level 3 meeting rooms work, and the erasers are missing." },
+  { title: "Branded items for university career fair", priority: "HIGH", requester: { dept: "People & Culture", country: "CY" },
+    description: "We are at the University of Cyprus career fair on Friday and need branded pens, tote bags and a roll-up banner.",
+    thread: [
+      { by: "A", after: "started", min: 40, text: "Pens and tote bags are in stock. The banner is in the marketing store room; I will check it is the current design." },
+      { by: "A", after: "resolved", min: -15, text: "Everything is boxed and waiting at reception, banner included." },
+    ] },
+  { title: "Training budget approval process", priority: "MEDIUM", requester: { dept: "Engineering", country: "CY" },
+    description: "I would like to attend a cloud certification course in January. How do I apply for the annual training budget?",
+    thread: [
+      { by: "A", after: "resolved", min: -45, text: "Send the course details to your manager for approval, then submit the training form; applications for January close on 15 December." },
+    ] },
+
+  // ---- CLOSED (32–39): IT, OT, FAC, HR, OT, SW, FAC, OT — confirmed by the requester ----
+  { title: "Laptop stolen while travelling", priority: "URGENT", requester: { dept: "Finance", country: "BD" },
+    description: "My laptop was stolen at the airport on the way back from a client visit in Singapore. It needs a remote wipe and I need a replacement.",
+    thread: [
+      { by: "A", after: "started", min: 10, text: "The device is locked and the remote wipe has been sent. A replacement laptop will be ready this afternoon." },
+      { by: "A", after: "resolved", min: -20, text: "Replacement handed over and your files restored from backup. Please also file a police report for insurance." },
+      { by: "R", after: "resolved", min: 60, text: "All working, and the police report is filed. Thank you for the quick help." },
+    ] },
+  { title: "Mentoring programme sign-up", priority: "LOW", requester: { dept: "IT", country: "MY" },
+    description: "I would like to join the mentoring programme as a mentee this cycle.",
+    thread: [
+      { by: "A", after: "resolved", min: -30, text: "You are registered. Your mentor will contact you in the first week of the cycle." },
+      { by: "R", after: "resolved", min: 120, text: "Great, thanks!" },
+    ] },
+  { title: "Sparking power socket at desk", priority: "URGENT", requester: { dept: "Engineering", country: "BD" },
+    description: "The power socket at desk 2.08 sparked when I plugged in my charger. I have stopped using it.",
+    thread: [
+      { by: "A", after: "started", min: 15, text: "Thanks for reporting it. The socket is isolated and taped off; the electrician is coming this afternoon." },
+      { by: "A", after: "resolved", min: -10, text: "Socket replaced and tested by the electrician." },
+      { by: "R", after: "resolved", min: 90, text: "Confirmed, it works fine now." },
+    ] },
+  { title: "Dependants missing on insurance portal", priority: "URGENT", requester: { dept: "Engineering", country: "MY" },
+    description: "My spouse and son do not appear on the medical insurance portal, and my son has a clinic appointment this week.",
+    thread: [
+      { by: "A", after: "started", min: 30, text: "Your dependants were missing from the file we sent to the insurer this month. I have resubmitted it and asked for urgent processing." },
+      { by: "A", after: "resolved", min: -15, text: "The insurer has confirmed. Both dependants are covered from the 1st." },
+      { by: "R", after: "resolved", min: 75, text: "They show on the portal now. Thank you!" },
+    ] },
+  { title: "Lost umbrella in meeting room 2", priority: "LOW", requester: { dept: "Finance", country: "LK" },
+    description: "I left a black umbrella in meeting room 2 yesterday afternoon.",
+    thread: [
+      { by: "A", after: "resolved", min: -20, text: "Found it. It is at reception under your name." },
+      { by: "R", after: "resolved", min: 40, text: "Collected, thanks." },
+    ] },
+  { title: "Lost phone with MFA app", priority: "URGENT", requester: { dept: "People & Culture", country: "LK" },
+    description: "I lost my phone last night and cannot complete multi-factor sign-in on my new phone.",
+    thread: [
+      { by: "A", after: "started", min: 20, text: "I have revoked the old device. Please call me so we can verify your identity and enrol the new phone." },
+      { by: "R", after: "resolved", min: 30, text: "Enrolled and signed in. Thanks for sorting it out so fast." },
+    ] },
+  { title: "Locker near the gym", priority: "LOW", requester: { dept: "Finance", country: "LK" },
+    description: "Could I have a locker near the gym area on the ground floor?" },
+  { title: "Team offsite venue suggestions", priority: "MEDIUM", requester: { role: "MANAGER", dept: "IT", country: "BD" },
+    description: "We are planning a one-day team offsite next quarter for 12 people. Is there a list of approved venues?",
+    thread: [
+      { by: "A", after: "resolved", min: -30, text: "The approved venue list and the booking form are on the intranet under Events. The Gulshan venue has a team discount." },
+      { by: "R", after: "resolved", min: 180, text: "Booked the Gulshan venue. Thanks!" },
+    ] },
 ];
