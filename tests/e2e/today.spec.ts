@@ -199,7 +199,8 @@ test("Overdue figure opens the overdue task list with the same count; filters na
 
 test("IT owner: own work in rule order, action confirms and refreshes, title opens the record", async ({ page }) => {
   await signIn(page, "it.owner@example.com");
-  await expect(page.getByRole("navigation", { name: "Dashboard views" })).toHaveCount(0); // no org reporting
+  await expect(page.getByRole("navigation", { name: "Dashboard views" }).getByRole("link")).toHaveCount(2); // same layout as everyone
+  await expect(tab(page, "Your tasks")).toHaveAttribute("aria-selected", "true"); // one tab, same tab bar
   const rows = attention(page).getByRole("listitem");
   await expect(rows.first()).toBeVisible();
   expect(await rows.count()).toBeLessThanOrEqual(3);
@@ -248,15 +249,23 @@ test("manager: team-only follow-ups and equipment line; Insights shows team repo
   await expect(page.getByRole("region", { name: "Headcount by office" })).toHaveCount(0); // org reporting is HR's
 });
 
-test("nothing to act on: caught-up state with onward links; employees see no reporting, even via ?tab=insights", async ({ page }) => {
+test("nothing to act on: caught-up state with onward links; employee Insights is personal, never organisation reporting", async ({ page }) => {
   await signIn(page, "employee.cy@example.com");
   await expect(page.getByText("You're all caught up.")).toBeVisible();
   await expect(attention(page).getByRole("link", { name: "Requests", exact: true })).toHaveAttribute("href", "/requests");
   await expect(attention(page).getByRole("link", { name: "Onboarding" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Dashboard views" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Dashboard views" }).getByRole("link", { name: "Insights" })).toBeVisible();
   await expect(page.getByRole("link", { name: /^My open requests/ })).toBeVisible();
   await page.goto("/dashboard?tab=insights");
-  await expect(page.getByText("You're all caught up.")).toBeVisible();
+  const myReq = page.getByRole("region", { name: "My requests" });
+  await expect(myReq).toBeVisible();
+  // Each figure opens the matching list of the employee's own requests.
+  const open = Number(await myReq.getByRole("link", { name: /^Open/ }).locator("[data-value]").textContent());
+  await myReq.getByRole("link", { name: /^Open/ }).click();
+  await expect(page).toHaveURL(/scope=mine&status=OPEN/);
+  await expect(page.getByText(open === 0 ? "No requests match these filters." : `${open} request${open === 1 ? "" : "s"}`, { exact: true })).toBeVisible();
+  await page.goto("/dashboard?tab=insights");
+  await expect(page.getByRole("region", { name: "My work" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Open requests by status" })).toHaveCount(0);
 });
 

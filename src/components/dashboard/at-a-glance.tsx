@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import type { OrgDashboard, MyDashboard } from "@/server/dashboard/service";
-import { Stat } from "@/components/dashboard/bar-chart";
+import type { OrgDashboard } from "@/server/dashboard/service";
 import { AgingFlow, CategoryBars, OfficeMap, Sparkline } from "@/components/dashboard/brand-viz";
 import { COUNTRY_LABEL, STATUS_LABEL, formatCalendarDate, formatInstant } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -121,21 +120,6 @@ export function OrgAtAGlance({ d }: { d: OrgDashboard }) {
             </p>
           </div>
         </section>
-      </div>
-    </section>
-  );
-}
-
-/** Managers: their own figures (the strip above shows the team's). */
-export function ManagerAtAGlance({ d }: { d: MyDashboard }) {
-  return (
-    <section aria-labelledby="glance-h" id="at-a-glance" className="mt-10 scroll-mt-6">
-      <h2 id="glance-h" className="mb-3 text-lg font-semibold tracking-[-0.02em]">Your own figures</h2>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="My open requests" value={d.myOpenRequests} href="/requests?scope=mine&status=OPEN" />
-        <Stat label="Requests assigned to me" value={d.myAssignedRequests} href="/my-work?kind=request" />
-        <Stat label="My open onboarding tasks" value={d.myPendingTasks} href="/my-work" />
-        <Stat label="Overdue tasks I own" value={d.myOverdueTasks} href="/my-work?overdue=true" tone={d.myOverdueTasks ? "danger" : undefined} />
       </div>
     </section>
   );

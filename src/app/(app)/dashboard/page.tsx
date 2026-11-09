@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AlarmClock, ArrowRight, BarChart3, CheckCheck, ClipboardList, FilePlus2, Hourglass, Inbox, ListChecks, Timer, UserPlus, Users, type LucideIcon } from "lucide-react";
 import { requireUser } from "@/server/auth/current-user";
 import { isHrAdmin, isManager } from "@/server/auth/permissions";
-import { myDashboard, orgDashboard, overdueToChase, todayInsight } from "@/server/dashboard/service";
+import { myDashboard, orgDashboard, overdueTasksInScope, overdueToChase, todayInsight } from "@/server/dashboard/service";
 import { TIER_LABEL, workQueue, type WorkItem } from "@/server/dashboard/work-queue";
 import { getOwnOnboardingId, listOnboardings } from "@/server/onboarding/service";
 import { sp } from "@/server/page";
@@ -10,7 +10,7 @@ import { listRequests } from "@/server/requests/service";
 import { listRequestsQuery } from "@/server/requests/schemas";
 import { Button } from "@/components/ui/button";
 import { CompactGreeting } from "@/components/dashboard/greeting";
-import { ManagerAtAGlance, OrgAtAGlance } from "@/components/dashboard/at-a-glance";
+import { OrgAtAGlance } from "@/components/dashboard/at-a-glance";
 import { ProgressRing } from "@/components/dashboard/brand-viz";
 import { AttentionTabs, type AttentionTab, type TabKey } from "@/components/dashboard/attention-tabs";
 import type { WorkRow } from "@/components/dashboard/work-list";
@@ -26,20 +26,20 @@ type Insight = Awaited<ReturnType<typeof todayInsight>>;
 
 /**
  * Dashboard with two views: Today (daily work: figures, one work list at a time, one
- * equipment line) and Insights (the assessment's reporting). Employees have no
- * organisation reporting, so they get Today only. Both views share one column width.
+ * equipment card, next steps) and Insights (reporting scoped to the viewer: the
+ * organisation for HR, the team for managers, their own requests and tasks for
+ * employees). Every role gets the same layout, cards and width.
  */
 export default async function DashboardPage({ searchParams }: { searchParams: SP }) {
   const me = await requireUser();
   const raw = await searchParams;
-  const reporting = isHrAdmin(me) || isManager(me);
-  const view = reporting && sp(raw.tab) === "insights" ? "insights" : "today";
+  const view = sp(raw.tab) === "insights" ? "insights" : "today";
   const now = new Date();
 
   return (
     <div className="mx-auto w-full max-w-[1080px]">
       <CompactGreeting firstName={me.name.split(" ")[0]} countryCode={me.countryCode} initialNow={now.toISOString()} />
-      {reporting ? (
+      {(
         <nav aria-label="Dashboard views" className="mb-6 flex gap-1 border-b">
           {(
             [
@@ -60,7 +60,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
             </Link>
           ))}
         </nav>
-      ) : null}
+      )}
       {view === "insights" ? await Insights({ me, now }) : await Today({ me, now, list: sp(raw.list) })}
     </div>
   );
@@ -233,19 +233,34 @@ function UpNext({ steps, shortcuts }: { steps: Step[]; shortcuts: Shortcut[] }) 
   );
 }
 
+/** Extra live counts behind the figure cards' context lines (same list filters the cards open). */
+async function figureContext(me: Me, hr: boolean, mgr: boolean) {
+  if (hr) return { inProgress: 0, assignedInProgress: 0, teamBlocked: 0 };
+  if (mgr) {
+    const [inProgress, overdue] = await Promise.all([countRequests(me, { scope: "team", status: "IN_PROGRESS" }), overdueTasksInScope(me, { state: "BLOCKED" })]);
+    return { inProgress, assignedInProgress: 0, teamBlocked: overdue.rows.length };
+  }
+  const [inProgress, assignedInProgress] = await Promise.all([
+    countRequests(me, { scope: "mine", status: "IN_PROGRESS" }),
+    countRequests(me, { scope: "assigned", status: "IN_PROGRESS" }),
+  ]);
+  return { inProgress, assignedInProgress, teamBlocked: 0 };
+}
+
 async function Today({ me, now, list }: { me: Me; now: Date; list?: string }) {
   const hr = isHrAdmin(me);
   const mgr = isManager(me);
   const ownP = getOwnOnboardingId(me.id);
-  const [queue, chase, insight, own, org, mine, active, next] = await Promise.all([
+  const [queue, chase, insight, own, org, mine, active, next, ctx] = await Promise.all([
     workQueue(me, now),
     overdueToChase(me, now),
     todayInsight(me, now),
     ownP,
     hr ? orgDashboard(me) : Promise.resolve(null),
     hr ? Promise.resolve(null) : myDashboard(me),
-    hr ? listOnboardings(me, { page: 1, pageSize: 100, progress: "active" }) : Promise.resolve({ data: [] as never[] }),
+    hr || mgr ? listOnboardings(me, { page: 1, pageSize: 100, progress: "active" }) : Promise.resolve({ data: [] as never[] }),
     ownP.then((id) => upNext(me, id)),
+    figureContext(me, hr, mgr),
   ]);
   const toAssign = queue.filter(isAssign);
   const myWork = queue.filter((i) => !isAssign(i));
@@ -290,7 +305,8 @@ async function Today({ me, now, list }: { me: Me; now: Date; list?: string }) {
   const inProgressOrg = org?.openRequests.byStatus.find((s) => s.status === "IN_PROGRESS")?.count ?? 0;
   const doneTasks = active.data.reduce((n, o) => n + o.progress.completed, 0);
   const allTasks = active.data.reduce((n, o) => n + o.progress.total, 0);
-  const blockedOverdue = org ? org.overdueTasks.filter((t) => t.state === "BLOCKED").length : 0;
+  const blockedOverdue = org ? org.overdueTasks.filter((t) => t.state === "BLOCKED").length : ctx.teamBlocked;
+  const teamBehind = active.data.filter((o) => o.progress.overdue > 0).length;
   const pct = (part: number, of: number) => (of ? Math.round((part / of) * 100) : 0);
   const kpis: KpiProps[] = hr && org
     ? [
@@ -309,19 +325,33 @@ async function Today({ me, now, list }: { me: Me; now: Date; list?: string }) {
       ]
     : mine?.team
       ? [
-          { label: "Team open requests", value: mine.team.openRequests, icon: Inbox, tone: "violet", hint: `From ${plural(mine.team.directReports, "direct report")}`, href: "/requests?scope=team&status=OPEN" },
+          { label: "Team open requests", value: mine.team.openRequests, icon: Inbox, tone: "violet", href: "/requests?scope=team&status=OPEN",
+            hint: `${ctx.inProgress} in progress · ${plural(mine.team.directReports, "direct report")}`,
+            meter: { part: ctx.inProgress, of: mine.team.openRequests, label: "team requests are in progress" } },
           { label: "Unassigned", value: mine.team.unassigned, icon: Hourglass, tone: "amber", href: "/requests?scope=team&status=SUBMITTED&sort=priority",
             hint: mine.team.unassigned ? `${pct(mine.team.unassigned, mine.team.openRequests)}% of team requests` : "Every team request has an owner",
             meter: { part: mine.team.unassigned, of: mine.team.openRequests, label: "team requests are unassigned" } },
-          { label: "Team onboarding", value: mine.team.activeOnboardings, icon: UserPlus, tone: "cyan", hint: "Checklists in progress", href: "/onboarding?progress=active" },
-          { label: "Team overdue tasks", value: mine.team.overdueTasks, icon: AlarmClock, tone: "coral", hint: mine.team.overdueTasks ? "Past due, hire's local date" : "Nothing past due", href: "/onboarding/overdue" },
+          { label: "Team onboarding", value: mine.team.activeOnboardings, icon: UserPlus, tone: "cyan", href: "/onboarding?progress=active",
+            hint: allTasks ? `${pct(doneTasks, allTasks)}% of tasks done · ${teamBehind ? `${teamBehind} behind` : "all on track"}` : "No checklist in progress",
+            meter: { part: doneTasks, of: allTasks, label: "tasks in your team's checklists are done" } },
+          { label: "Team overdue tasks", value: mine.team.overdueTasks, icon: AlarmClock, tone: "coral", href: "/onboarding/overdue",
+            hint: mine.team.overdueTasks ? `${blockedOverdue} waiting on other tasks` : "Nothing past due",
+            meter: { part: blockedOverdue, of: mine.team.overdueTasks, label: "overdue tasks are blocked" } },
         ]
       : mine
         ? [
-            { label: "My open requests", value: mine.myOpenRequests, icon: Inbox, tone: "violet", hint: "Requests you raised", href: "/requests?scope=mine&status=OPEN" },
-            { label: "Assigned to me", value: mine.myAssignedRequests, icon: Hourglass, tone: "amber", hint: "Requests you're handling", href: "/my-work?kind=request" },
-            { label: "My open tasks", value: mine.myPendingTasks, icon: UserPlus, tone: "cyan", hint: "Onboarding tasks you own", href: "/my-work" },
-            { label: "My overdue tasks", value: mine.myOverdueTasks, icon: AlarmClock, tone: "coral", hint: mine.myOverdueTasks ? "Past due, hire's local date" : "Nothing past due", href: "/my-work?overdue=true" },
+            { label: "My open requests", value: mine.myOpenRequests, icon: Inbox, tone: "violet", href: "/requests?scope=mine&status=OPEN",
+              hint: mine.myOpenRequests ? `${ctx.inProgress} being worked on` : "Nothing waiting on others",
+              meter: { part: ctx.inProgress, of: mine.myOpenRequests, label: "of your requests are in progress" } },
+            { label: "Assigned to me", value: mine.myAssignedRequests, icon: Hourglass, tone: "amber", href: "/my-work?kind=request",
+              hint: mine.myAssignedRequests ? `${ctx.assignedInProgress} started` : "No requests to handle",
+              meter: { part: ctx.assignedInProgress, of: mine.myAssignedRequests, label: "requests assigned to you are started" } },
+            { label: "My open tasks", value: mine.myPendingTasks, icon: UserPlus, tone: "cyan", href: "/my-work",
+              hint: mine.myPendingTasks ? `${mine.myPendingTasks - mine.myOverdueTasks} on time` : "No onboarding tasks to do",
+              meter: { part: mine.myPendingTasks - mine.myOverdueTasks, of: mine.myPendingTasks, label: "of your open tasks are on time" } },
+            { label: "My overdue tasks", value: mine.myOverdueTasks, icon: AlarmClock, tone: "coral", href: "/my-work?overdue=true",
+              hint: mine.myOverdueTasks ? `of ${plural(mine.myPendingTasks, "open task")}` : "Nothing past due",
+              meter: { part: mine.myOverdueTasks, of: mine.myPendingTasks, label: "of your open tasks are overdue" } },
           ]
         : [];
 
@@ -355,7 +385,7 @@ async function Today({ me, now, list }: { me: Me; now: Date; list?: string }) {
 
 function Panel({ id, title, meta, action, children }: { id: string; title: string; meta?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section aria-labelledby={id} className="surface">
+    <section aria-labelledby={id} className="surface flex h-full flex-col overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-5 py-3">
         <div className="min-w-0">
           <h3 id={id} className="text-[15px] font-semibold tracking-[-0.02em]">{title}</h3>
@@ -370,8 +400,68 @@ function Panel({ id, title, meta, action, children }: { id: string; title: strin
 
 const linkCls = "rounded text-xs font-medium text-link hover:underline";
 
+/** One figure inside an Insights panel; links to the records behind it when it can. */
+function Cell({ label, value, href, tone }: { label: string; value: number; href?: string; tone?: "danger" | "warning" }) {
+  const body = (
+    <>
+      <span className="block text-[13px] font-medium text-muted-foreground group-hover:text-foreground">{label}</span>
+      <span data-value className={cn("mt-1 block text-[30px] font-semibold leading-none tracking-[-0.04em] tabular-nums", value > 0 && tone === "danger" && "text-danger", value > 0 && tone === "warning" && "text-warning")}>{value}</span>
+    </>
+  );
+  return href ? (
+    <Link href={href} className="group bg-card px-5 py-4 transition-colors hover:bg-white/[0.03]">{body}</Link>
+  ) : (
+    <div className="bg-card px-5 py-4">{body}</div>
+  );
+}
+
+/** Employees' Insights: their own requests, work and checklist, in the same panels as everyone else's. */
+async function PersonalInsights({ me }: { me: Me }) {
+  const [mine, resolved, closed] = await Promise.all([
+    myDashboard(me),
+    countRequests(me, { scope: "mine", status: "RESOLVED" }),
+    countRequests(me, { scope: "mine", status: "CLOSED" }),
+  ]);
+  const p = mine.myOnboardingProgress;
+  return (
+    <>
+      <h2 className="sr-only">Insights</h2>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Panel id="my-req-h" title="My requests" meta="Requests you raised, by where they are now" action={<Link href="/requests?scope=mine" className={linkCls}>All my requests</Link>}>
+          <div className="grid flex-1 grid-cols-3 gap-px bg-border">
+            <Cell label="Open" value={mine.myOpenRequests} href="/requests?scope=mine&status=OPEN" />
+            <Cell label="To confirm" value={resolved} href="/requests?scope=mine&status=RESOLVED" tone="warning" />
+            <Cell label="Closed" value={closed} href="/requests?scope=mine&status=CLOSED" />
+          </div>
+        </Panel>
+        <Panel id="my-work-h" title="My work" meta="Onboarding tasks you own and requests you handle" action={<Link href="/my-work" className={linkCls}>Open My Work</Link>}>
+          <div className="grid flex-1 grid-cols-3 gap-px bg-border">
+            <Cell label="Open tasks" value={mine.myPendingTasks} href="/my-work" />
+            <Cell label="Overdue" value={mine.myOverdueTasks} href="/my-work?overdue=true" tone="danger" />
+            <Cell label="Requests" value={mine.myAssignedRequests} href="/my-work?kind=request" />
+          </div>
+        </Panel>
+        {p ? (
+          <div className="lg:col-span-2">
+            <Panel id="my-onb-h" title="My onboarding" meta="Your first-month checklist" action={<Link href={`/onboarding/${p.onboardingId}`} className={linkCls}>Open my checklist</Link>}>
+              <Link href={`/onboarding/${p.onboardingId}`} className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-white/[0.03]">
+                <ProgressRing value={p.completed} total={p.total} size={48} />
+                <span>
+                  <span className="block text-sm font-medium">{p.completed} of {p.total} tasks done</span>
+                  <span className="block text-xs text-muted-foreground">{p.completed === p.total ? "Checklist complete" : `${plural(p.total - p.completed, "task")} still to go`}</span>
+                </span>
+              </Link>
+            </Panel>
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
 async function Insights({ me, now }: { me: Me; now: Date }) {
   const hr = isHrAdmin(me);
+  if (!hr && !isManager(me)) return PersonalInsights({ me });
   const [active, insight, org, mine, chase] = await Promise.all([
     listOnboardings(me, { page: 1, pageSize: 100, progress: "active" }),
     todayInsight(me, now),
@@ -391,7 +481,7 @@ async function Insights({ me, now }: { me: Me; now: Date }) {
   return (
     <>
       <h2 className="sr-only">Insights</h2>
-      <div className="grid items-start gap-5 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         <Panel
           id="overdue-h"
           title="Overdue onboarding tasks"
@@ -482,7 +572,20 @@ async function Insights({ me, now }: { me: Me; now: Date }) {
         </div>
       </div>
 
-      {org ? <OrgAtAGlance d={org} /> : mine ? <ManagerAtAGlance d={mine} /> : null}
+      {org ? (
+        <OrgAtAGlance d={org} />
+      ) : mine ? (
+        <div className="mt-5">
+          <Panel id="own-h" title="Your own work" meta="Requests you raised or handle and onboarding tasks you own" action={<Link href="/my-work" className={linkCls}>Open My Work</Link>}>
+            <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4">
+              <Cell label="My open requests" value={mine.myOpenRequests} href="/requests?scope=mine&status=OPEN" />
+              <Cell label="Assigned to me" value={mine.myAssignedRequests} href="/my-work?kind=request" />
+              <Cell label="My open tasks" value={mine.myPendingTasks} href="/my-work" />
+              <Cell label="My overdue tasks" value={mine.myOverdueTasks} href="/my-work?overdue=true" tone="danger" />
+            </div>
+          </Panel>
+        </div>
+      ) : null}
     </>
   );
 }

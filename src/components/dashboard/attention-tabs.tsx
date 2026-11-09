@@ -64,7 +64,7 @@ export function AttentionTabs({ tabs, initial }: { tabs: AttentionTab[]; initial
 
   return (
     <div>
-      {tabs.length > 1 ? (
+      {tabs.length > 0 ? (
         <div
           role="tablist"
           aria-label="Work lists"
@@ -116,7 +116,7 @@ export function AttentionTabs({ tabs, initial }: { tabs: AttentionTab[]; initial
         ) : null}
       </div>
 
-      <div role={tabs.length > 1 ? "tabpanel" : undefined} id={`panel-${tab.key}`} aria-labelledby={tabs.length > 1 ? `tab-${tab.key}` : undefined}>
+      <div role="tabpanel" id={`panel-${tab.key}`} aria-labelledby={`tab-${tab.key}`}>
         {tab.key === "assign" ? (
           <AssignPanel
             tab={tab}
