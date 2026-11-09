@@ -18,3 +18,7 @@ Other dependencies are listed with their licences in `package-lock.json` / `node
 
 - **Poppins** (Indian Type Foundry) and **Martian Mono** (Evil Martians), via `@fontsource/poppins@5.3.0` and `@fontsource/martian-mono@5.3.0`. Licensed under the SIL Open Font License 1.1.
 - **dotted-map@3.1.0** (MIT). Used once at development time to generate the static dot coordinates in `src/components/dashboard/world-dots.ts`; not a runtime dependency.
+
+## Images
+
+- Sign-in panel photo: "Abstract purple and blue curves" by Pawel Czerwinski, https://unsplash.com/photos/abstract-purple-and-blue-curves-Y8Y_s90SK3A, used under the Unsplash License (free to use; credited on the page anyway). Stored as `public/images/login-abstract.{webp,jpg}` (1600 px wide).

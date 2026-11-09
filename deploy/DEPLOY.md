@@ -20,7 +20,7 @@ The app is built off-box (the VPS has ~1 GB free RAM and swap nearly full), then
 # build machine
 BUILD_STANDALONE=1 npm run build
 mkdir -p rel/app rel/tools/src/server/onboarding
-cp -r .next/standalone/. rel/app/ && cp -r .next/static rel/app/.next/static
+cp -r .next/standalone/. rel/app/ && cp -r .next/static rel/app/.next/static && cp -r public rel/app/public
 rm -f rel/app/.env                 # Next copies the build machine's .env into standalone; never ship it
 cp -r prisma rel/tools/ && cp src/server/onboarding/{dates,dependencies}.ts rel/tools/src/server/onboarding/
 # rel/tools/package.json pins prisma@6.19.3 @prisma/client@6.19.3 tsx@4.23.15 bcryptjs@3.0.3
