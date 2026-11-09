@@ -36,6 +36,21 @@ systemctl restart peopleops && curl -s http://127.0.0.1:3310/api/health
 
 Seeding was run **once** on 2026-11-09 (`ALLOW_ASSESSMENT_SEED=true npx tsx prisma/seed.ts`, then `verify-seed.ts` → 22/22). The flag is not in the env file, so the app never seeds on boot.
 
-Enable the AI router: the live env file has `AI_PROVIDER=openai` and `OPENAI_MODEL=gpt-6.1-sol`; set `OPENAI_API_KEY=` (an OpenAI platform API key) in `/etc/peopleops/peopleops.env`, then `systemctl restart peopleops`. (Anthropic alternative: `AI_PROVIDER=anthropic` + `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL`.)
+## AI provider on the VPS: Codex bridge (dedicated ChatGPT login)
+
+At the candidate's request the live AI router uses their ChatGPT/Codex plan through the Codex CLI instead of an API key, with a **separate login session** so the existing Codex agents on the box are unaffected:
+
+| Piece | Where |
+| --- | --- |
+| Linux user | `peopleops-ai` (no shell; cannot read `/etc/peopleops/peopleops.env` or `/opt/peopleops`) |
+| Codex login | `CODEX_HOME=/var/lib/peopleops-ai/codex` (0700), created with `codex login --device-auth` and approved by the account owner |
+| Bridge | `/opt/peopleops-ai/bridge.mjs` as `peopleops-ai.service` (see `deploy/codex-bridge/`), unix socket `/run/peopleops-ai/bridge.sock` (0660, group `peopleops-ai`; the app user `peopleops` is a member) |
+| App config | `AI_PROVIDER=codex`, `CODEX_BRIDGE_SOCKET=/run/peopleops-ai/bridge.sock` |
+
+Each suggestion runs one ephemeral `codex exec` with model `gpt-6.1-sol`, read-only sandbox, `approval_policy=never`, web search off, shell/exec/browser/apps/plugins features disabled, an empty working directory, `--ignore-user-config`, and `--output-schema` (the same strict JSON schema); the app then validates the result against live database IDs as for any provider. Re-login: `sudo -u peopleops-ai env HOME=/var/lib/peopleops-ai CODEX_HOME=/var/lib/peopleops-ai/codex codex login --device-auth`. Status: `... codex login status`. Logs: `journalctl -u peopleops-ai`.
+
+Caveat (told to the candidate): this serves app users from a personal ChatGPT plan; OpenAI's docs recommend API keys for programmatic use, and plan rate limits apply. Switching to an API key needs only `AI_PROVIDER=openai` + `OPENAI_API_KEY`.
+
+Alternative: the env file also supports `AI_PROVIDER=openai` and `OPENAI_MODEL=gpt-6.1-sol`; set `OPENAI_API_KEY=` (an OpenAI platform API key) in `/etc/peopleops/peopleops.env`, then `systemctl restart peopleops`. (Anthropic alternative: `AI_PROVIDER=anthropic` + `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL`.)
 
 Logs: `journalctl -u peopleops -f`. Rollback: point `/opt/peopleops/current` at the previous release and restart.
