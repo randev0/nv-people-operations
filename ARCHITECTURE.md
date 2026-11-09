@@ -506,7 +506,7 @@ own onboarding tasks they can start or complete (blocked tasks are excluded), re
 | Templates · assign checklists · manage employees | — | — | ✔ |
 | Employee list | — | self + direct reports (read-only) | all |
 | Dashboard: Today work queue | own tasks; own resolved requests to close | + team requests to assign | + all requests to assign |
-| Dashboard: Insights | personal | personal + team | organisation-wide |
+| Dashboard: At a glance | personal strip only | + own figures (team in the strip) | organisation-wide reporting |
 | AI suggestions | while drafting; team/category on own requests | + suggested person on requests I can assign | same, all open requests |
 
 ### 4.2 How it is enforced
