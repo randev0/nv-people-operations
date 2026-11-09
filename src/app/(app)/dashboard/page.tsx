@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Inbox, UserPlus } from "lucide-react";
+import { AlarmClock, ArrowRight, Hourglass, Inbox, UserPlus, type LucideIcon } from "lucide-react";
 import { requireUser } from "@/server/auth/current-user";
 import { isHrAdmin, isManager } from "@/server/auth/permissions";
 import { myDashboard, orgDashboard, overdueToChase, todayInsight } from "@/server/dashboard/service";
@@ -64,16 +64,40 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
   );
 }
 
-function Kpi({ label, value, hint, href, tone }: { label: string; value: number; hint: string; href: string; tone?: "danger" | "warning" }) {
+type Tone = "violet" | "amber" | "cyan" | "coral";
+const TONE: Record<Tone, { chip: string; meter: string; glow: string; value: string }> = {
+  violet: { chip: "bg-primary/15 text-info", meter: "bg-primary", glow: "from-primary/20", value: "" },
+  amber: { chip: "bg-warning/15 text-warning", meter: "bg-warning", glow: "from-warning/15", value: "text-warning" },
+  cyan: { chip: "bg-link/15 text-link", meter: "bg-link", glow: "from-link/15", value: "" },
+  coral: { chip: "bg-danger/15 text-danger", meter: "bg-danger", glow: "from-danger/15", value: "text-danger" },
+};
+type KpiProps = { label: string; value: number; hint: string; href: string; tone: Tone; icon: LucideIcon; meter?: { of: number; part: number; label: string } };
+
+/**
+ * Headline figure: icon, label, value, one line of context and, where it helps, a thin
+ * meter showing the share behind the hint. DOM order keeps the value last so the link's
+ * accessible name reads "Unassigned … 8".
+ */
+function Kpi({ label, value, hint, href, tone, icon: Icon, meter }: KpiProps) {
+  const t = TONE[tone];
+  const quiet = value === 0;
+  const pct = meter && meter.of > 0 ? Math.round((meter.part / meter.of) * 100) : 0;
   return (
-    <Link href={href} className="surface surface-hover group flex flex-col-reverse items-start justify-between gap-1 px-4 py-3 sm:flex-row sm:items-center sm:gap-3">
-      <span className="min-w-0">
-        <span className="block text-[13px] font-medium text-muted-foreground group-hover:text-foreground">{label}</span>
-        <span className="hidden truncate text-xs text-muted-foreground sm:block">{hint}</span>
+    <Link href={href} className="surface surface-hover group relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 overflow-hidden px-4 py-3.5">
+      <i aria-hidden className={cn("pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-gradient-radial to-transparent opacity-0 blur-2xl transition-opacity group-hover:opacity-100", t.glow, !quiet && "opacity-60")} />
+      <span className="relative col-start-1 row-start-1 flex min-w-0 items-center gap-2">
+        <span className={cn("hidden h-7 w-7 shrink-0 place-items-center rounded-lg sm:grid", quiet ? "bg-secondary text-muted-foreground" : t.chip)} aria-hidden>
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="text-[13px] font-medium leading-tight text-muted-foreground group-hover:text-foreground">{label}</span>
       </span>
-      <span className={cn("text-[28px] font-semibold leading-none tracking-[-0.04em] tabular-nums", tone === "danger" && value > 0 && "text-danger", tone === "warning" && value > 0 && "text-warning")}>
-        {value}
-      </span>
+      <span className="relative col-span-2 row-start-2 mt-2 text-xs leading-snug text-muted-foreground">{hint}</span>
+      {meter ? (
+        <span className="relative col-span-2 row-start-3 mt-2 block h-1 overflow-hidden rounded-full bg-secondary" aria-hidden title={`${meter.part} of ${meter.of} ${meter.label}`}>
+          <span className={cn("block h-full rounded-full", t.meter)} style={{ width: `${pct}%` }} />
+        </span>
+      ) : null}
+      <span data-value className={cn("relative col-start-2 row-start-1 text-[30px] font-semibold leading-none tracking-[-0.04em] tabular-nums", !quiet && t.value)}>{value}</span>
     </Link>
   );
 }
@@ -113,13 +137,14 @@ function EquipmentLine({ insight }: { insight: Insight }) {
 async function Today({ me, now, list }: { me: Me; now: Date; list?: string }) {
   const hr = isHrAdmin(me);
   const mgr = isManager(me);
-  const [queue, chase, insight, own, org, mine] = await Promise.all([
+  const [queue, chase, insight, own, org, mine, active] = await Promise.all([
     workQueue(me, now),
     overdueToChase(me, now),
     todayInsight(me, now),
     getOwnOnboardingId(me.id),
     hr ? orgDashboard(me) : Promise.resolve(null),
     hr ? Promise.resolve(null) : myDashboard(me),
+    hr ? listOnboardings(me, { page: 1, pageSize: 100, progress: "active" }) : Promise.resolve({ data: [] as never[] }),
   ]);
   const toAssign = queue.filter(isAssign);
   const myWork = queue.filter((i) => !isAssign(i));
@@ -159,26 +184,43 @@ async function Today({ me, now, list }: { me: Me; now: Date; list?: string }) {
   const initial: TabKey = valid(list) ? list : (tabs.find((t) => t.count > 0)?.key ?? tabs[0].key);
   const total = tabs.reduce((n, t) => n + t.count, 0);
 
-  const kpis = hr && org
+  const unassignedOrg = org?.openRequests.byStatus.find((s) => s.status === "SUBMITTED")?.count ?? 0;
+  const hiresBehind = org ? new Set(org.overdueTasks.map((t) => t.onboardingId)).size : 0;
+  const inProgressOrg = org?.openRequests.byStatus.find((s) => s.status === "IN_PROGRESS")?.count ?? 0;
+  const doneTasks = active.data.reduce((n, o) => n + o.progress.completed, 0);
+  const allTasks = active.data.reduce((n, o) => n + o.progress.total, 0);
+  const blockedOverdue = org ? org.overdueTasks.filter((t) => t.state === "BLOCKED").length : 0;
+  const pct = (part: number, of: number) => (of ? Math.round((part / of) * 100) : 0);
+  const kpis: KpiProps[] = hr && org
     ? [
-        { label: "Open requests", value: org.openRequests.total, hint: "Not yet resolved", href: "/requests?scope=all&status=OPEN" },
-        { label: "Unassigned", value: org.openRequests.byStatus.find((s) => s.status === "SUBMITTED")?.count ?? 0, hint: "Waiting for an assignee", href: "/requests?scope=all&status=SUBMITTED&sort=priority", tone: "warning" as const },
-        { label: "Onboarding", value: org.onboarding.activeHires, hint: "New hires with tasks left", href: "/onboarding?progress=active" },
-        { label: "Overdue tasks", value: org.onboarding.overdueTasks, hint: "Past due, hire's local date", href: "/onboarding/overdue", tone: "danger" as const },
+        { label: "Open requests", value: org.openRequests.total, icon: Inbox, tone: "violet", href: "/requests?scope=all&status=OPEN",
+          hint: `${inProgressOrg} in progress · ${org.requestFlow.openedLast7} opened this week`,
+          meter: { part: inProgressOrg, of: org.openRequests.total, label: "open requests are in progress" } },
+        { label: "Unassigned", value: unassignedOrg, icon: Hourglass, tone: "amber", href: "/requests?scope=all&status=SUBMITTED&sort=priority",
+          hint: unassignedOrg ? `${pct(unassignedOrg, org.openRequests.total)}% of open requests` : "Every open request has an owner",
+          meter: { part: unassignedOrg, of: org.openRequests.total, label: "open requests are unassigned" } },
+        { label: "Onboarding", value: org.onboarding.activeHires, icon: UserPlus, tone: "cyan", href: "/onboarding?progress=active",
+          hint: `${pct(doneTasks, allTasks)}% of tasks done · ${hiresBehind ? `${hiresBehind} behind` : "all on track"}`,
+          meter: { part: doneTasks, of: allTasks, label: "tasks in active checklists are done" } },
+        { label: "Overdue tasks", value: org.onboarding.overdueTasks, icon: AlarmClock, tone: "coral", href: "/onboarding/overdue",
+          hint: org.onboarding.overdueTasks ? `${blockedOverdue} waiting on other tasks` : "Nothing past due",
+          meter: { part: blockedOverdue, of: org.onboarding.overdueTasks, label: "overdue tasks are blocked" } },
       ]
     : mine?.team
       ? [
-          { label: "Team open requests", value: mine.team.openRequests, hint: "Your direct reports", href: "/requests?scope=team&status=OPEN" },
-          { label: "Unassigned", value: mine.team.unassigned, hint: "Team requests to assign", href: "/requests?scope=team&status=SUBMITTED&sort=priority", tone: "warning" as const },
-          { label: "Team onboarding", value: mine.team.activeOnboardings, hint: "Checklists in progress", href: "/onboarding?progress=active" },
-          { label: "Team overdue tasks", value: mine.team.overdueTasks, hint: "Past due, hire's local date", href: "/onboarding/overdue", tone: "danger" as const },
+          { label: "Team open requests", value: mine.team.openRequests, icon: Inbox, tone: "violet", hint: `From ${plural(mine.team.directReports, "direct report")}`, href: "/requests?scope=team&status=OPEN" },
+          { label: "Unassigned", value: mine.team.unassigned, icon: Hourglass, tone: "amber", href: "/requests?scope=team&status=SUBMITTED&sort=priority",
+            hint: mine.team.unassigned ? `${pct(mine.team.unassigned, mine.team.openRequests)}% of team requests` : "Every team request has an owner",
+            meter: { part: mine.team.unassigned, of: mine.team.openRequests, label: "team requests are unassigned" } },
+          { label: "Team onboarding", value: mine.team.activeOnboardings, icon: UserPlus, tone: "cyan", hint: "Checklists in progress", href: "/onboarding?progress=active" },
+          { label: "Team overdue tasks", value: mine.team.overdueTasks, icon: AlarmClock, tone: "coral", hint: mine.team.overdueTasks ? "Past due, hire's local date" : "Nothing past due", href: "/onboarding/overdue" },
         ]
       : mine
         ? [
-            { label: "My open requests", value: mine.myOpenRequests, hint: "Requests you raised", href: "/requests?scope=mine&status=OPEN" },
-            { label: "Assigned to me", value: mine.myAssignedRequests, hint: "Requests you're handling", href: "/my-work?kind=request" },
-            { label: "My open tasks", value: mine.myPendingTasks, hint: "Onboarding tasks you own", href: "/my-work" },
-            { label: "My overdue tasks", value: mine.myOverdueTasks, hint: "Past due, hire's local date", href: "/my-work?overdue=true", tone: "danger" as const },
+            { label: "My open requests", value: mine.myOpenRequests, icon: Inbox, tone: "violet", hint: "Requests you raised", href: "/requests?scope=mine&status=OPEN" },
+            { label: "Assigned to me", value: mine.myAssignedRequests, icon: Hourglass, tone: "amber", hint: "Requests you're handling", href: "/my-work?kind=request" },
+            { label: "My open tasks", value: mine.myPendingTasks, icon: UserPlus, tone: "cyan", hint: "Onboarding tasks you own", href: "/my-work" },
+            { label: "My overdue tasks", value: mine.myOverdueTasks, icon: AlarmClock, tone: "coral", hint: mine.myOverdueTasks ? "Past due, hire's local date" : "Nothing past due", href: "/my-work?overdue=true" },
           ]
         : [];
 

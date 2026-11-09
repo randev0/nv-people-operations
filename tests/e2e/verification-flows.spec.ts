@@ -107,7 +107,9 @@ test.describe.serial("presentation verification flows", () => {
     const figure = async (path: string, name: RegExp) => {
       await page.goto(path);
       const l = page.getByRole("link", { name }).first();
-      const n = Number((await l.locator(":scope > span").nth(1).textContent())!.trim());
+      await l.waitFor(); // the page streams in after a loading state; count() below does not wait
+      const v = l.locator("[data-value]");
+      const n = Number((await ((await v.count()) ? v : l.locator(":scope > span").nth(1)).textContent())!.trim());
       await l.click();
       return n;
     };

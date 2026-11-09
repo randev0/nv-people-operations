@@ -31,6 +31,7 @@ const config: Config = {
         sans: ["Poppins", "ui-sans-serif", "system-ui", "Segoe UI", "sans-serif"],
         mono: ["Martian Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
+      backgroundImage: { "gradient-radial": "radial-gradient(closest-side, var(--tw-gradient-stops))" },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

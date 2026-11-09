@@ -134,3 +134,10 @@
 - Insights: overdue onboarding tasks (total, blocked, by office, each linking to the filtered overdue list), IT equipment for new hires, onboarding progress, then requests by status/category, headcount by office and request flow. "Onboarding now" moved to the Onboarding page (checklists with overdue or blocked tasks). "Onboarding to chase" renamed "Onboarding follow-ups" everywhere.
 - Layout check (seeded copy, hr.admin): at 1440×900 the whole of Today fits without scrolling (equipment line ends at ~700 px); at 1280×800 it ends at 721 px; no horizontal overflow at 1440, 1280 or 390. At 390 the two task tabs first scrolled sideways and clipped the second count; changed to two equal columns that wrap.
 - Checks: lint 0, typecheck 0, unit 36/36, integration 27/27, e2e 20/20 in three runs (axe 24 pages, 0 violations).
+
+## 2026-11-10 — Office clocks back in view; livelier figure cards
+- Feedback: hiding the office times behind a click was extra work, and the header's right side and the figure cards looked empty and flat.
+- Clocks: the four offices are always shown in the header's free space (city, local time, open/closed with a green dot when open; offset and hours on hover). On phones they form a 2×2 grid and the status shows as a dot only (text kept for screen readers).
+- Figure cards: a tinted icon per figure, one line of live context and, for HR, a thin meter: open requests (8 in progress · 19 opened this week), unassigned (33% of open), onboarding (74% of tasks done · 6 behind; from the active checklists), overdue (9 waiting on other tasks). A faint glow in the card's colour, stronger on hover; nothing animates on its own. Cards with zero go neutral.
+- Test fix: the figure helper read the value with `count()` before the streamed page content had replaced the loading state, so it fell back to the hint text and parsed NaN. It now waits for the link first. Value spans carry `data-value`.
+- Checks: lint 0, typecheck 0, unit 36/36, e2e 20/20 twice (axe 24 pages, 0 violations); no horizontal overflow at 1440, 1280, 390.

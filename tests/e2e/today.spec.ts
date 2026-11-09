@@ -1,5 +1,5 @@
 /**
- * Dashboard "Today": compact header with the Office times control, KPI strip, "Needs
+ * Dashboard "Today": compact header with the four office clocks, KPI strip, "Needs
  * your attention" with one work list at a time (Assign requests / Onboarding
  * follow-ups), assigning from the side panel (single, stale and bulk), View all links,
  * the equipment line, the caught-up state, keyboard use and role access.
@@ -25,18 +25,13 @@ const kpi = async (page: Page, label: string) => Number((await page.getByRole("l
 
 test.describe.configure({ mode: "serial" });
 
-test("HR: office times on demand; tabs with live counts; three rows each; keyboard; selected tab survives reload; View all", async ({ page }) => {
+test("HR: office clocks visible; tabs with live counts; three rows each; keyboard; selected tab survives reload; View all", async ({ page }) => {
   await signIn(page, "hr.admin@example.com");
-  // Office clocks are collapsed behind one control; Escape closes and returns focus.
+  // Office clocks are always visible in the header: four offices, each open or closed.
   const clocks = page.getByRole("list", { name: "Local time in each office" });
-  await expect(clocks).toHaveCount(0);
-  const officeBtn = page.getByRole("button", { name: /^Office times/ });
-  await officeBtn.click();
   await expect(clocks.getByRole("listitem")).toHaveCount(4);
   await expect(clocks).toContainText("Nicosia");
-  await page.keyboard.press("Escape");
-  await expect(clocks).toHaveCount(0);
-  await expect(officeBtn).toBeFocused();
+  for (const t of await clocks.getByRole("listitem").allInnerTexts()) expect(t).toMatch(/(Open|Closed)\s*\d{2}:\d{2}/);
 
   // Counts come from the same rules as the figures.
   const unassigned = await kpi(page, "Unassigned");
@@ -184,7 +179,7 @@ test("HR bulk-assigns two requests after Select; selection count and bar appear 
 test("Overdue figure opens the overdue task list with the same count; filters narrow it; employees are refused", async ({ page }) => {
   await signIn(page, "hr.admin@example.com");
   const card = page.getByRole("link", { name: /^Overdue tasks/ });
-  const n = Number(await card.locator(":scope > span").nth(1).textContent());
+  const n = Number(await card.locator("[data-value]").textContent());
   await card.click();
   await expect(page).toHaveURL(/\/onboarding\/overdue$/);
   await expect(page.getByRole("heading", { level: 1, name: "Overdue onboarding tasks" })).toBeVisible();
