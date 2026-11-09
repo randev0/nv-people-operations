@@ -1,6 +1,6 @@
 # People Operations — Architecture
 
-Status: **design (Phase 0)**. This document describes the target architecture. It is updated when implementation decisions change; see the "Decision log" at the end. Nothing here claims a check has passed; see `docs/ACCEPTANCE.md` for evidence.
+Status: **implemented locally (phases 1–5); not yet deployed**. This document describes the architecture as built; changes from the Phase 0 design are recorded in the decision log at the end. Evidence for every acceptance check is in `docs/ACCEPTANCE.md`.
 
 People Operations is a small HRIS for a single organisation (≈100 people across Bangladesh, Malaysia, Sri Lanka and Cyprus) with two modules on a shared user/authentication base:
 
@@ -92,7 +92,11 @@ tests/unit/**, tests/integration/**, tests/e2e/**
 
 ### 2.2 Dependency set
 
-Versions are pinned exactly in `package.json` and locked in `package-lock.json`. Starting point is the donor's resolved, mutually compatible set (Next 16.1.x, React 19.2.x, Tailwind 3.4.x, zod 4, iron-session 8, bcryptjs 3); Prisma major and the final versions are confirmed against the registry and official docs at install time and recorded in the decision log. Only packages actually used are installed (the donor's MSAL, nodemailer, xlsx, reactflow, calendar etc. are excluded). Test tooling: Vitest (unit + integration against `TEST_DATABASE_URL`) and Playwright (e2e).
+Exact versions are pinned in `package.json` and locked in `package-lock.json` (resolved 2026-11-09): Next.js 16.4.5, React 19.3.1, Prisma CLI + client 6.19.3, zod 4.6.7, iron-session 8.0.4, bcryptjs 3.0.3, @anthropic-ai/sdk 1.6.0, Tailwind CSS 3.4.19, TypeScript 5.9.3, ESLint 10.14 with eslint-config-next 16.4.5, Playwright 1.63.0, tsx 4.23. Only packages actually used are installed (the donor's MSAL, nodemailer, xlsx, reactflow, calendar etc. are excluded). `overrides.deepmerge-ts = 8.0.0` removes a high-severity advisory inside Prisma's CLI config loader.
+
+Prisma 7/8 were available but would require driver adapters and a config-file migration; v6 is the latest line matching the code and the docs it was written against (trade-off recorded in §9).
+
+Tests: Node's built-in `node:test` runner (via tsx) for unit and HTTP-level integration tests; Playwright for end-to-end flows. Integration and e2e runs create a fresh uniquely named PostgreSQL database per run on the `TEST_DATABASE_URL` server, migrate and seed it, run the production build against it on port 3100, and drop only that database afterwards.
 
 ## 3. Data model
 
@@ -146,6 +150,7 @@ erDiagram
 
 ## 4. Authentication and authorization
 
+- Logout destroys the cookie **and increments `sessionVersion`**, so a copied pre-logout cookie is rejected too (sealed cookies are otherwise stateless). Trade-off: logout ends the user's sessions on all devices.
 - Login: zod-validated `{email,password}`; email normalized; throttled (10 attempts / 15 min per email+IP, DB-backed atomic upsert); bcrypt compare (a dummy compare runs for unknown emails to equalize timing); generic `INVALID_CREDENTIALS`. Success regenerates the session.
 - Session cookie: iron-session, HttpOnly, `Secure` when `APP_URL` is https, SameSite=Lax, path `/`, 7 days. Contains `{userId, sessionVersion}` only.
 - `getCurrentUser()` loads the user on every protected request and denies missing, `loginEnabled=false`, or `sessionVersion` mismatch. Disabling an account or changing its password increments `sessionVersion`.
@@ -186,7 +191,24 @@ HR dashboard (`/api/dashboard`) computed from the database at one `asOf` instant
 
 ## 8. AI request router
 
-Flow: draft title/description → `POST /api/ai/route-request` → authenticate, origin check, validate lengths, DB-backed rate limit (10/min/user) → load categories, departments and a capped candidate list (login-enabled users in the support departments: id, name, department, country only) → Anthropic Messages API call with forced tool use (JSON schema) and a 15 s budget, at most one retry on transient errors → strict zod validation against the live IDs → `RouterDTO {categoryId, priority, suggestedDepartmentId, suggestedAssigneeId|null, explanation(≤300), needsReview:true}`. Unknown category/department → 502-class `AI_INVALID_OUTPUT` (reported as 503 `AI_UNAVAILABLE` family); a suggested person not in the suggested department or not login-enabled is replaced with `null`. Nothing is written to the request. Logs contain request id, latency and outcome only. Missing key → 503 `AI_UNAVAILABLE`; the request form keeps the draft and manual submission works. No deterministic fallback is labelled as AI.
+Flow: draft title/description → `POST /api/ai/route-request` → authenticate, origin check, validate lengths, DB-backed rate limit (10/min/user, counted before any provider call) → load categories, departments and a capped candidate list (≤60 login-enabled users in the support departments: opaque id, name, department, country only — no email or HR fields) → Anthropic Messages API with **structured outputs** (`output_config.format` JSON schema), model from `ANTHROPIC_MODEL`, 7 s per attempt and one SDK retry (≈15 s budget) → strict zod validation against the live IDs → `RouterDTO {categoryId, priority, suggestedDepartmentId, suggestedAssigneeId|null, suggestedAssigneeName|null, explanation(≤300), needsReview:true}`. Unknown category/department/priority → 503 `AI_INVALID_OUTPUT`; a suggested person not in the suggested department or not in the candidate set is replaced with `null`. The request text is fenced as untrusted data in the user turn; the system prompt is the pack's template. Nothing is written to the request. Logs contain request id, latency and outcome only. Missing key → 503 `AI_UNAVAILABLE`; the request form keeps the draft and manual submission works. No deterministic fallback is labelled as AI.
+
+## 8a. Endpoint inventory
+
+Full input/output DTOs and error codes: `docs/API_CONTRACT.md`. All routes return `{data}` / `{data, meta}` or `{error:{code,message,fieldErrors?}, requestId}`; mutations require `Origin` = `APP_URL`.
+
+| Area | Endpoints | Authorization (enforced in services) |
+| --- | --- | --- |
+| Auth | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | public (throttled) / session |
+| Lookups | `GET /countries`, `/departments`, `/request-categories` | any session |
+| Employees | `GET,POST /employees`, `GET,PATCH /employees/:id`, `GET /employees/manager-options` | list: HR all, manager self+reports, employee 403; writes HR |
+| Requests | `GET,POST /requests`, `GET /requests/:id`, `GET,POST /requests/:id/comments`, `GET /requests/:id/events`, `GET /requests/:id/assignee-options`, `POST /requests/:id/assign`, `POST /requests/:id/transition` | read scope = own/assigned/direct reports/HR (else 404); assign = HR or requester's manager; start/resolve = assignee; close = requester/manager/HR |
+| Templates | `GET,POST /onboarding-templates`, `GET,PUT /onboarding-templates/:id` | HR |
+| Onboarding | `GET,POST /onboarding`, `GET /onboarding/:id`, `GET /onboarding/assignment-options`, `GET /onboarding/unassigned-employees` | read own/reports/all; assign HR |
+| Tasks | `POST /onboarding-tasks/:id/transition`, `GET /onboarding-tasks/:id/events` | transition owner only; events owner or checklist scope |
+| Work & dashboard | `GET /my-work`, `GET /dashboard` (HR), `GET /dashboard/mine` | current user's assignments; HR org view |
+| AI | `POST /ai/route-request` | any session; 10/min/user; never writes |
+| Health | `GET /health` | public, no configuration details |
 
 ## 9. Trade-offs
 
@@ -197,10 +219,12 @@ Flow: draft title/description → `POST /api/ai/route-request` → authenticate,
 5. **Advisory AI vs autonomous assignment.** Suggestions are reviewed and cannot bypass manager permissions. Cost: an extra click; routing accuracy is not yet measured.
 6. **Derived BLOCKED/overdue vs stored statuses.** No scheduler and no stale flags. Cost: computed on read (cheap at this size).
 7. **Row lock on Onboarding vs SERIALIZABLE + retry.** A per-checklist `FOR UPDATE` is simple to reason about and test; contention is only within one hire's checklist.
+8. **Prisma 6 vs 7/8.** Staying on the v6 client avoids a driver-adapter/config migration during a four-day build; cost: an upgrade is deferred work.
+9. **Stateless sealed cookie + `sessionVersion` vs server-side session table.** No session store to run; revocation is per-user (logout/disable bumps the version), not per-device.
 
 ## 10. Limitations (MVP)
 
-No reopening, cancellation or deletion of requests/tasks; no attachments, email, notifications, password reset or public signup; templates cannot be migrated onto existing checklists; AI routing accuracy is not evaluated beyond the scenario list in `docs/ACCEPTANCE.md`.
+No reopening, cancellation or deletion of requests/tasks; no attachments, email, notifications, password reset or public signup; templates cannot be migrated onto existing checklists; AI routing accuracy is not evaluated beyond the scenario list in `docs/ACCEPTANCE.md`. My Work filters derived flags (blocked/overdue) in memory after loading an owner's tasks — fine for hundreds of tasks per owner, not for very large volumes. Request list search uses `ILIKE` without trigram indexes. Logout signs a user out on all devices. Overdue counts change over time by design (they are computed against "today" in each hire's timezone).
 
 ## 11. Decision log
 
@@ -209,4 +233,10 @@ No reopening, cancellation or deletion of requests/tasks; no attachments, email,
 | 2026-11-09 | Assessment PDF not supplied; build pack used as specification. |
 | 2026-11-09 | Seed targets Section 7 figures (stricter than Section 1 minimums). |
 | 2026-11-09 | Onboarding completion concurrency: `SELECT … FOR UPDATE` on Onboarding row. |
-| 2026-11-09 | Implementation environment: npm registry blocked by session egress policy; dependency versions pending validation (see WORKLOG). |
+| 2026-11-09 | npm registry initially blocked by session egress policy; unblocked by the candidate the same day. Versions resolved as in §2.2. |
+| 2026-11-09 | Tests use `node:test` instead of Vitest (fewer dependencies; ran before install). |
+| 2026-11-09 | AI adapter uses structured outputs instead of forced tool use (SDK 1.x; sampling params removed). |
+| 2026-11-09 | Logout increments `sessionVersion` (fix for BUG-1, copied cookie still valid after logout). |
+| 2026-11-09 | Prisma refuses `migrate reset` from an AI agent without user consent; test runner uses a fresh per-run database instead of resetting. |
+| 2026-11-09 | Added narrow lookups `/employees/manager-options`, `/onboarding/unassigned-employees`; RouterDTO gains `suggestedAssigneeName`. |
+| 2026-11-09 | Onboarding owner eligibility excludes the hire themself; request assignee cannot be the requester. |

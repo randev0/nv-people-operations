@@ -4,44 +4,53 @@ States: NOT RUN / PASS / FAIL / BLOCKED. A row is PASS only with a recorded comm
 
 | ID | Scenario | Expected | State | Date | Commit | Evidence / limitation |
 | --- | --- | --- | --- | --- | --- | --- |
-| A01 | Login as each documented role; invalid password; logout | Correct user scope; invalid denied; cookie invalid after logout | NOT RUN | | | |
-| A02 | Unauthenticated direct API call | 401; no sensitive payload | NOT RUN | | | |
-| A03 | Employee A guesses Employee B request ID, comments URL and events URL | 404; no disclosure and no comment inserted | NOT RUN | | | |
-| A04 | Manager accesses non-direct-report request or checklist | Denied; department/country membership alone grants nothing | NOT RUN | | | |
-| A05 | Request assigned to employee outside requester's team | Assignee can access/work that request only | NOT RUN | | | |
-| A06 | Employee submits status/assignee/requester in create payload | Rejected; cannot escalate fields | NOT RUN | | | |
-| A07 | Non-assignee starts/resolves request; skip SUBMITTED→CLOSED | Denied without mutation/history entry | NOT RUN | | | |
-| A08 | Correct assignment→start→resolve→close | Valid states, history, actors and timestamps persist | NOT RUN | | | |
-| A09 | Two simultaneous transitions with same version | Exactly one succeeds; other 409; no duplicate event | NOT RUN | | | |
-| A10 | Employee tries HR API or dashboard directly | 403; UI hiding is not the test | NOT RUN | | | |
-| A11 | Disabled user with previously valid session | Access denied; no stale role/session bypass | NOT RUN | | | |
-| O01 | HR creates/edits template through UI | Valid persisted template; version increments | NOT RUN | | | |
-| O02 | Self-edge, cycle, missing prerequisite, cross-template edge | 422; template stays valid | NOT RUN | | | |
-| O03 | Assign template with one missing owner | 422; no partial onboarding/tasks | NOT RUN | | | |
-| O04 | Assign twice; concurrent duplicate assignment | One checklist only; conflict reported | NOT RUN | | | |
-| O05 | Edit template after assignment | Existing employee snapshot unchanged | NOT RUN | | | |
-| O06 | Start or complete a task before prerequisites complete | Denied; shows blocking prerequisite | NOT RUN | | | |
-| O07 | Owner completes prerequisite then starts dependent | Dependent becomes available without manual unblock | NOT RUN | | | |
-| O08 | New hire tries to complete task assigned to IT | Denied; IT owner can complete via My Work | NOT RUN | | | |
-| O09 | Task owner reads another hire's full checklist | Denied unless independent manager/HR scope exists | NOT RUN | | | |
-| O10 | Day 1/7/30 from joining date, month/year boundary, Cyprus DST | Correct calendar dates and consistent overdue labels | NOT RUN | | | |
-| O11 | Local due date still today vs next local day | Not overdue today; overdue next day if incomplete | NOT RUN | | | |
-| O12 | Final two tasks completed concurrently | All complete and onboarding.completedAt set correctly | NOT RUN | | | |
-| D01 | Fresh seed; seed twice | Required counts and same totals after rerun | NOT RUN | | | |
-| D02 | Dashboard headcount | Four countries ×25 =100; database-derived | NOT RUN | | | |
-| D03 | Resolve request; complete overdue task | Dashboard and detail totals update consistently | NOT RUN | | | |
-| D04 | Cross-module insight | Lists seeded recent hires and actual open IT request links | NOT RUN | | | |
-| AI01 | Real provider valid description | Valid database category/team/person IDs; visible explanation | NOT RUN | | | |
-| AI02 | Provider timeout/missing key/invalid JSON/unknown ID | Helpful error, preserved draft, manual submission works | NOT RUN | | | |
-| AI03 | Prompt injection requesting secrets/admin assignment | No secret exposure or unauthorized action; constrained response | NOT RUN | | | |
-| AI04 | Rate limit reached | 429 without unbounded provider calls | NOT RUN | | | |
-| U01 | Narrow viewport, keyboard, loading/empty/error states | Usable screens with labels/focus; no horizontal obstruction | NOT RUN | | | |
-| P01 | Fresh browser opens deployed URL and logs in | No local-only URL, missing assets or authentication redirect loop | NOT RUN | | | |
-| P02 | New comment/request persists after reload/restart | Real persistent database storage | NOT RUN | | | |
-| P03 | Repository/env/build output review | No API/session/database secrets or production data committed | NOT RUN | | | |
-| P04 | Clean installation/build/lint/typecheck/test | Commands and actual results recorded; failures not hidden | NOT RUN | | | |
+| A01 | Login as each documented role; invalid password; logout | Correct user scope; invalid denied; cookie invalid after logout | PASS | 2026-11-09 | 21871a0 | integration `auth.test.ts` A01: 5 roles log in with correct role; wrong/unknown → identical 401; after logout both the cleared jar and a copied pre-logout cookie → 401 (BUG-1 fix) |
+| A02 | Unauthenticated direct API call | 401; no sensitive payload | PASS | 2026-11-09 | 21871a0 | integration A02: 7 GET endpoints + POST → 401 with only `{error,requestId}` |
+| A03 | Employee A guesses Employee B request ID, comments URL and events URL | 404; no disclosure and no comment inserted | PASS | 2026-11-09 | 21871a0 | integration `requests.test.ts` A03: detail/comments/events → 404, no title leak, comment & transition → 404, comment count unchanged |
+| A04 | Manager accesses non-direct-report request or checklist | Denied; department/country membership alone grants nothing | PASS | 2026-11-09 | 21871a0 | integration A04: manager.my → 404 on request of non-report in same country and of non-report in same department; 404 on non-report checklist |
+| A05 | Request assigned to employee outside requester's team | Assignee can access/work that request only | PASS | 2026-11-09 | 21871a0 | integration A05/A07/A08: it.owner (outside requester's team) reads/comments/works only that request; unrelated request → 404 |
+| A06 | Employee submits status/assignee/requester in create payload | Rejected; cannot escalate fields | PASS | 2026-11-09 | 21871a0 | integration A06: `status`/`assigneeId`/`requesterId` in create body → 400 (strict schema); no row created |
+| A07 | Non-assignee starts/resolves request; skip SUBMITTED→CLOSED | Denied without mutation/history entry | PASS | 2026-11-09 | 21871a0 | integration: SUBMITTED→CLOSE 422; requester/manager/HR START → 403; event count unchanged (1, then 2) |
+| A08 | Correct assignment→start→resolve→close | Valid states, history, actors and timestamps persist | PASS | 2026-11-09 | 21871a0 | integration + e2e `flows.spec.ts` test 1: events CREATED→ASSIGNED→IN_PROGRESS→RESOLVED→CLOSED with expected actors; resolvedAt/closedAt set; persisted after reload |
+| A09 | Two simultaneous transitions with same version | Exactly one succeeds; other 409; no duplicate event | PASS | 2026-11-09 | 21871a0 | integration A09: 5 rounds of simultaneous manager+HR assign at version 1 → [200,409], exactly one ASSIGNED event, version 2 |
+| A10 | Employee tries HR API or dashboard directly | 403; UI hiding is not the test | PASS | 2026-11-09 | 21871a0 | integration A10: employee → 403 on /dashboard, /employees, /onboarding-templates, scope=all/team, POST /employees (no row) |
+| A11 | Disabled user with previously valid session | Access denied; no stale role/session bypass | PASS | 2026-11-09 | 21871a0 | integration A11: HR disables user → existing session 401 on /auth/me and /requests; login 401; re-enabling does not revive old cookie |
+| O01 | HR creates/edits template through UI | Valid persisted template; version increments | PASS | 2026-11-09 | 21871a0 | integration O01 (create v1 → edit v2, stale version 409) + e2e test 3 (create via editor UI). Editing through the UI was exercised manually only via screenshots, not automated |
+| O02 | Self-edge, cycle, missing prerequisite, cross-template edge | 422; template stays valid | PASS | 2026-11-09 | 21871a0 | integration O02: self-edge/cycle/missing/empty/cross-template key → 400/422 (`DEPENDENCY_CYCLE` for cycle); template stays v1 with tasks a,b. Unit `dependencies.test.ts`. e2e shows loop warning + server rejection |
+| O03 | Assign template with one missing owner | 422; no partial onboarding/tasks | PASS | 2026-11-09 | 21871a0 | integration O03: one owner missing → 422 with `fieldErrors.owners.<key>`; 0 onboardings for hire; hire as IT owner → 422 |
+| O04 | Assign twice; concurrent duplicate assignment | One checklist only; conflict reported | PASS | 2026-11-09 | 21871a0 | integration O04: two concurrent identical assignments → [201,409]; 1 onboarding, 10 tasks; third → 409 |
+| O05 | Edit template after assignment | Existing employee snapshot unchanged | PASS | 2026-11-09 | 21871a0 | integration O05: template titles/due days edited after assignment; checklist titles+due dates identical; old template version → 409 |
+| O06 | Start or complete a task before prerequisites complete | Denied; shows blocking prerequisite | PASS | 2026-11-09 | 21871a0 | integration O06: START/COMPLETE on blocked security task → 422 `PREREQUISITES_INCOMPLETE`, message names "Create company account" |
+| O07 | Owner completes prerequisite then starts dependent | Dependent becomes available without manual unblock | PASS | 2026-11-09 | 21871a0 | integration O07 + e2e test 2: completing account makes security/handover NOT_STARTED and startable with no manual unblock |
+| O08 | New hire tries to complete task assigned to IT | Denied; IT owner can complete via My Work | PASS | 2026-11-09 | 21871a0 | integration O08: new hire and HR → 403 completing IT task; it.owner → 200 (also via My Work UI in e2e) |
+| O09 | Task owner reads another hire's full checklist | Denied unless independent manager/HR scope exists | PASS | 2026-11-09 | 21871a0 | integration O09: it.owner → 404 on employee.my checklist; My Work hire context keys = id,name,department only; unrelated employee → 404 on task events |
+| O10 | Day 1/7/30 from joining date, month/year boundary, Cyprus DST | Correct calendar dates and consistent overdue labels | PASS | 2026-11-09 | 21871a0 | unit `dates.test.ts`: day 1/7/30, month/leap/year boundaries, Cyprus DST start/end; integration O03 asserts day 7/30 dates from API |
+| O11 | Local due date still today vs next local day | Not overdue today; overdue next day if incomplete | PASS | 2026-11-09 | 21871a0 | unit: KL 23:59:59 local not overdue, 00:00 next day overdue; Nicosia boundary across DST end |
+| O12 | Final two tasks completed concurrently | All complete and onboarding.completedAt set correctly | PASS | 2026-11-09 | 21871a0 | integration O12: 6 rounds, two owners complete the last two tasks concurrently → both 200, completedAt set every round (row lock on Onboarding) |
+| D01 | Fresh seed; seed twice | Required counts and same totals after rerun | PASS | 2026-11-09 | 21871a0 | local: `db:seed` ×3 → identical counts (users 100, requests 40, comments 24, events 120, onboardings 8, tasks 88); `db:verify-seed` 22/22 PASS; opt-in flag off → exit 1. Not yet run on a hosted DB |
+| D02 | Dashboard headcount | Four countries ×25 =100; database-derived | PASS | 2026-11-09 | 21871a0 | integration D02: dashboard headcount equals DB groupBy; 25 per country |
+| D03 | Resolve request; complete overdue task | Dashboard and detail totals update consistently | PASS | 2026-11-09 | 21871a0 | integration D03: resolve request → open total −1 and IN_PROGRESS −1; complete overdue task → overdue −1; detail flag false; sum of list progress.overdue == dashboard |
+| D04 | Cross-module insight | Lists seeded recent hires and actual open IT request links | PASS | 2026-11-09 | 21871a0 | integration D04: ≥3 hires listed; every linked request belongs to that hire, IT_EQUIPMENT, open. Screenshot shows 5 hires with links |
+| AI01 | Real provider valid description | Valid database category/team/person IDs; visible explanation | BLOCKED | 2026-11-09 | 21871a0 | No Anthropic API key/model id supplied. Live provider call not made |
+| AI02 | Provider timeout/missing key/invalid JSON/unknown ID | Helpful error, preserved draft, manual submission works | PASS (partial) | 2026-11-09 | 21871a0 | Missing key → 503 `AI_UNAVAILABLE`, nothing written, manual submit 201 (integration); e2e: unavailable message, draft preserved. Invalid JSON / unknown IDs / bad enum → rejected (unit, mocked). Provider timeout path NOT RUN |
+| AI03 | Prompt injection requesting secrets/admin assignment | No secret exposure or unauthorized action; constrained response | PASS (mocked) | 2026-11-09 | 21871a0 | unit `ai-router.test.ts`: request text fenced as untrusted, system prompt forbids following it, no emails/hashes in prompt, invented admin id → null. Real-provider injection test NOT RUN (no key) |
+| AI04 | Rate limit reached | 429 without unbounded provider calls | PASS | 2026-11-09 | 21871a0 | integration: limit 3/min in test env → [503,503,503,429,429]; provider is never reached after the limit |
+| U01 | Narrow viewport, keyboard, loading/empty/error states | Usable screens with labels/focus; no horizontal obstruction | PASS (partial) | 2026-11-09 | 21871a0 | e2e U01: 7 screens at 390px have no horizontal overflow; mobile menu works. Labels/visible focus implemented; full keyboard-only walkthrough NOT RUN |
+| P01 | Fresh browser opens deployed URL and logs in | No local-only URL, missing assets or authentication redirect loop | BLOCKED | 2026-11-09 | 21871a0 | No hosting target yet |
+| P02 | New comment/request persists after reload/restart | Real persistent database storage | BLOCKED | 2026-11-09 | 21871a0 | Local persistence verified (comment visible after reload in e2e); restart/hosted persistence not run |
+| P03 | Repository/env/build output review | No API/session/database secrets or production data committed | PASS (local) | 2026-11-09 | 21871a0 | `git ls-files` has no .env/keys; `git grep` for key/secret patterns finds none (demo password appears only in README by design). Hosted build output not reviewed |
+| P04 | Clean installation/build/lint/typecheck/test | Commands and actual results recorded; failures not hidden | PASS (local) | 2026-11-09 | 21871a0 | See command log: build, lint, typecheck, unit 24/24, integration 23/23 (×3), e2e 5/5 |
 
 ## Command log
 
 | Date | Command | Result |
 | --- | --- | --- |
+| 2026-11-09 | `npm install` (pinned) | 478 packages; `npm audit` → 3 high in Prisma CLI config (deepmerge-ts) fixed by override; 1 moderate dev-only (minimatch via ESLint) remains |
+| 2026-11-09 | `npm run typecheck` | 0 errors |
+| 2026-11-09 | `npm run lint` | 0 problems |
+| 2026-11-09 | `npm run build` | compiled; 50 route entries (pages + API) |
+| 2026-11-09 | `npm run test:unit` | 24 pass, 0 fail |
+| 2026-11-09 | `npm run test:integration` | 23 pass, 0 fail (3 consecutive runs; first run 22/23, see WORKLOG test-isolation note) |
+| 2026-11-09 | `npm run test:e2e` | 5 passed |
+| 2026-11-09 | `npm run db:seed` ×3 + `npm run db:verify-seed` | identical totals; 22/22 checks |
+| — | Live deployment / real AI provider smoke test | NOT RUN — blocked on hosting, database and API key |

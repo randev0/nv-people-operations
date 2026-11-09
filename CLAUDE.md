@@ -15,6 +15,10 @@ Record genuine debugging as it happens (WORKLOG.md raw notes → DEBUG_LOG.md fo
 - Onboarding dates/overdue: `src/server/onboarding/dates.ts`; DAG validation: `src/server/onboarding/dependencies.ts`
 - Error envelope / handler wrapper: `src/server/http.ts`
 
-## Commands
+## Commands (verified 2026-11-09)
 
-Commands are filled in as they are implemented and verified (see README). Until dependencies can be installed, none have been run.
+- `npm run typecheck`, `npm run lint`, `npm run build`
+- `npm run test:unit` (node:test via tsx, `--conditions=react-server` so `server-only` modules load)
+- `npm run test:integration` / `npm run test:e2e` — need `npm run build` first and `TEST_DATABASE_URL`; they create and drop their own per-run database. Never use `prisma migrate reset` against any database.
+- `npm run db:migrate` (migrate deploy), `ALLOW_ASSESSMENT_SEED=true npm run db:seed`, `npm run db:verify-seed`
+- In the Claude cloud workspace npm must go through the agent proxy: prefix with `npm_config_noproxy= NO_PROXY= no_proxy=`. Stop stale servers with `pkill -f next-server`.
