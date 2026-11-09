@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Self-contained server bundle for the VPS deployment (BUILD_STANDALONE=1); local `npm start` is unaffected.
+  ...(process.env.BUILD_STANDALONE === "1" ? { output: "standalone" as const } : {}),
   serverExternalPackages: ["@prisma/client", "bcryptjs"],
   async headers() {
     return [
