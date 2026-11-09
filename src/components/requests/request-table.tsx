@@ -19,7 +19,7 @@ export function RequestTable({ rows, showRequester = true, from, showNextAction 
       {rows.map((r) => (
         <li key={r.id} className="px-4 py-3">
           <div className="flex items-start justify-between gap-3">
-            <Link href={href(r.id)} className="font-medium leading-snug hover:text-primary hover:underline">
+            <Link href={href(r.id)} className="font-medium leading-snug hover:text-link hover:underline">
               <span className="mr-1 font-normal text-muted-foreground">#{r.number}</span>{r.title}
             </Link>
             <StatusBadge status={r.status} />
@@ -53,7 +53,7 @@ export function RequestTable({ rows, showRequester = true, from, showNextAction 
             <TableRow key={r.id}>
               <TableCell className="tabular-nums text-muted-foreground">{r.number}</TableCell>
               <TableCell className="min-w-[14rem]">
-                <Link href={href(r.id)} className="font-medium text-foreground hover:text-primary hover:underline">
+                <Link href={href(r.id)} className="font-medium text-foreground hover:text-link hover:underline">
                   {r.title}
                 </Link>
                 {showRequester ? (

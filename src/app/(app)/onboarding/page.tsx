@@ -79,7 +79,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
               {data.map((o) => (
                 <TableRow key={o.id}>
                   <TableCell className="min-w-[12rem]">
-                    <Link href={`/onboarding/${o.id}`} className="font-medium hover:text-primary hover:underline">{o.employee.name}</Link>
+                    <Link href={`/onboarding/${o.id}`} className="font-medium hover:text-link hover:underline">{o.employee.name}</Link>
                     <p className="text-xs text-muted-foreground">{o.employee.department.name} · {COUNTRY_LABEL[o.employee.countryCode]}</p>
                   </TableCell>
                   <TableCell className="hidden whitespace-nowrap md:table-cell">{formatCalendarDate(o.startDate)}</TableCell>
@@ -89,8 +89,8 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
                   </TableCell>
                   <TableCell className="hidden text-right tabular-nums sm:table-cell">{o.progress.completed}</TableCell>
                   <TableCell className="hidden text-right tabular-nums sm:table-cell">{o.progress.pending}</TableCell>
-                  <TableCell className={cn("text-right tabular-nums", o.progress.overdue ? "font-semibold text-red-700" : "text-muted-foreground")}>{o.progress.overdue}</TableCell>
-                  <TableCell className={cn("text-right tabular-nums", o.progress.blocked ? "font-semibold text-amber-800" : "text-muted-foreground")}>{o.progress.blocked}</TableCell>
+                  <TableCell className={cn("text-right tabular-nums", o.progress.overdue ? "font-semibold text-danger" : "text-muted-foreground")}>{o.progress.overdue}</TableCell>
+                  <TableCell className={cn("text-right tabular-nums", o.progress.blocked ? "font-semibold text-warning" : "text-muted-foreground")}>{o.progress.blocked}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

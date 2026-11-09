@@ -60,3 +60,4 @@ Evidence re-run on commit `cfe2666` (final local run after a clean `npm ci`). St
 | 2026-11-09 | Item 5: `npm run test:integration`, `npm run test:e2e` | integration 27/27 (new AI timeout case), e2e 8/8 (new keyboard-only, dialog focus, axe scan: 15 pages, 0 violations) |
 | 2026-11-09 | UI redesign: lint, typecheck, `npm run test:unit`, `npm run test:integration`, `npm run test:e2e` | lint 0, typecheck 0, unit 33/33, integration 27/27, e2e 11/11 (new: employee submit → queue; manager "Needs assignment" → assign, Back keeps filter; HR insight → records, Back keeps insight) |
 | 2026-11-09 | Live (e654398) Playwright smoke + `verify-seed` | insight drill-down 5/5 rows, Back keeps filter, blocked reasons shown, 390 px no overflow; seed 22/22 |
+| 2026-11-09 | NEXT brand redesign: lint, typecheck, unit, integration, e2e | lint 0, typecheck 0, unit 33/33, integration 27/27, e2e 11/11 (axe 15 pages, 0 violations on dark theme) |

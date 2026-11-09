@@ -105,7 +105,7 @@ export function NewRequestForm({ categories, departments }: { categories: Catego
             {fe("categoryId") ? <p className="text-sm text-destructive">Choose a category.</p> : null}
             {suggestion && suggestion.categoryId !== categoryId ? (
               <SuggestionChip label={`AI suggests ${catName(suggestion.categoryId)}`} onApply={() => setCategoryId(suggestion.categoryId)} />
-            ) : suggestion ? <p className="text-xs text-emerald-700">Matches the AI suggestion</p> : null}
+            ) : suggestion ? <p className="text-xs text-success">Matches the AI suggestion</p> : null}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="priority">Priority</Label>
@@ -114,13 +114,13 @@ export function NewRequestForm({ categories, departments }: { categories: Catego
             </select>
             {suggestion && suggestion.priority !== priority ? (
               <SuggestionChip label={`AI suggests ${PRIORITY_LABEL[suggestion.priority]}`} onApply={() => setPriority(suggestion.priority)} />
-            ) : suggestion ? <p className="text-xs text-emerald-700">Matches the AI suggestion</p> : null}
+            ) : suggestion ? <p className="text-xs text-success">Matches the AI suggestion</p> : null}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={submitting}>{submitting ? "Submitting…" : "Submit request"}</Button>
           <Button type="button" variant="outline" onClick={suggest} disabled={suggesting || submitting}>
-            <Sparkles aria-hidden className="text-primary" />
+            <Sparkles aria-hidden className="text-link" />
             {suggesting ? "Asking AI…" : "Suggest routing"}
           </Button>
         </div>
@@ -128,7 +128,7 @@ export function NewRequestForm({ categories, departments }: { categories: Catego
 
       <aside className="space-y-3" aria-live="polite">
         <div className="rounded-lg border bg-card p-4 text-sm">
-          <h2 className="flex items-center gap-1.5 text-sm font-semibold"><Sparkles className="h-4 w-4 text-primary" aria-hidden />Routing suggestion</h2>
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold"><Sparkles className="h-4 w-4 text-link" aria-hidden />Routing suggestion</h2>
           <p className="mt-1 text-muted-foreground">
             Optional. AI reads your title and description and proposes a category, priority and team. You review it; it never submits or assigns anything. Your request is also classified automatically after you submit.
           </p>
@@ -138,7 +138,7 @@ export function NewRequestForm({ categories, departments }: { categories: Catego
           <Alert><AlertTitle>Suggestion unavailable</AlertTitle><AlertDescription>{aiError} Your draft is unchanged.</AlertDescription></Alert>
         ) : null}
         {suggestion ? (
-          <div className="rounded-lg border border-indigo-200 bg-card p-4 text-sm">
+          <div className="rounded-lg border border-info/30 bg-card p-4 text-sm">
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
               <dt className="text-muted-foreground">Category</dt><dd>{catName(suggestion.categoryId)}</dd>
               <dt className="text-muted-foreground">Priority</dt><dd>{PRIORITY_LABEL[suggestion.priority]}</dd>
@@ -162,7 +162,7 @@ function SuggestionChip({ label, onApply }: { label: string; onApply: () => void
   return (
     <p className="flex flex-wrap items-center gap-2 text-xs text-accent-foreground">
       <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5"><Sparkles className="h-3 w-3" aria-hidden />{label}</span>
-      <button type="button" onClick={onApply} className="font-medium text-primary underline-offset-2 hover:underline">Apply</button>
+      <button type="button" onClick={onApply} className="font-medium text-link underline-offset-2 hover:underline">Apply</button>
     </p>
   );
 }

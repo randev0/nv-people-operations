@@ -23,7 +23,7 @@ export default async function TemplatesPage() {
           {r.data.data.map((t) => (
             <li key={t.id} className="rounded-lg border bg-card p-4">
               <div className="flex items-start justify-between gap-2">
-                <Link href={`/templates/${t.id}`} className="font-medium text-primary hover:underline">{t.name}</Link>
+                <Link href={`/templates/${t.id}`} className="font-medium text-link hover:underline">{t.name}</Link>
                 <Badge variant={t.isActive ? "success" : "muted"}>{t.isActive ? "Active" : "Archived"}</Badge>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">{t.description}</p>

@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-/** White work surface on the warm canvas. */
+/** Raised work surface on the ink canvas. */
 export function Panel({ children, className, as: As = "section", ...rest }: { children: ReactNode; className?: string; as?: "section" | "div" | "aside" } & React.HTMLAttributes<HTMLElement>) {
   return (
-    <As className={cn("rounded-lg border bg-card shadow-[0_1px_2px_rgba(28,25,23,0.04)]", className)} {...rest}>
+    <As className={cn("surface", className)} {...rest}>
       {children}
     </As>
   );
@@ -12,8 +12,8 @@ export function Panel({ children, className, as: As = "section", ...rest }: { ch
 
 export function PanelHeader({ title, id, actions, className }: { title: ReactNode; id?: string; actions?: ReactNode; className?: string }) {
   return (
-    <div className={cn("flex items-center justify-between gap-3 border-b px-4 py-3", className)}>
-      <h2 id={id} className="text-sm font-semibold">{title}</h2>
+    <div className={cn("flex items-center justify-between gap-3 border-b px-5 py-3.5", className)}>
+      <h2 id={id} className="text-[14px] font-semibold tracking-[-0.02em]">{title}</h2>
       {actions}
     </div>
   );
@@ -26,21 +26,30 @@ export function MetaList({ children, className }: { children: ReactNode; classNa
 
 export function MetaItem({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="px-4 py-3">
-      <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</dt>
+    <div className="px-5 py-3">
+      <dt className="eyebrow">{label}</dt>
       <dd className="mt-1 text-sm">{children}</dd>
     </div>
   );
 }
 
-export function Avatar({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) {
+/** Deterministic hue from a name, so each person keeps their colour everywhere. */
+export function nameHue(name: string) {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return h;
+}
+
+export function Avatar({ name, size = "sm" }: { name: string; size?: "sm" | "md" | "lg" }) {
   const initials = name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+  const h = nameHue(name);
   return (
     <span
       aria-hidden
+      style={{ backgroundImage: `linear-gradient(135deg, hsl(${h} 70% 38%), hsl(${(h + 55) % 360} 75% 28%))` }}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full bg-accent font-semibold text-accent-foreground",
-        size === "sm" ? "h-6 w-6 text-[10px]" : "h-8 w-8 text-xs",
+        "inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white ring-1 ring-white/15",
+        size === "sm" ? "h-6 w-6 text-[10px]" : size === "md" ? "h-8 w-8 text-[11px]" : "h-10 w-10 text-xs",
       )}
     >
       {initials}

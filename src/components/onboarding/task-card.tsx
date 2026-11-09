@@ -43,9 +43,9 @@ export function blockedReason(prereqs: TaskView["prerequisites"]): string {
 
 function StatusIcon({ s }: { s: string }) {
   const cls = "mt-0.5 h-5 w-5 shrink-0";
-  if (s === "COMPLETED") return <CheckCircle2 className={cn(cls, "text-emerald-600")} aria-hidden />;
-  if (s === "IN_PROGRESS") return <PlayCircle className={cn(cls, "text-primary")} aria-hidden />;
-  if (s === "BLOCKED") return <Lock className={cn(cls, "text-amber-600")} aria-hidden />;
+  if (s === "COMPLETED") return <CheckCircle2 className={cn(cls, "text-success")} aria-hidden />;
+  if (s === "IN_PROGRESS") return <PlayCircle className={cn(cls, "text-link")} aria-hidden />;
+  if (s === "BLOCKED") return <Lock className={cn(cls, "text-warning")} aria-hidden />;
   return <Circle className={cn(cls, "text-muted-foreground/60")} aria-hidden />;
 }
 
@@ -84,11 +84,11 @@ export function TaskCard({ task, timezone, showHire = false }: { task: TaskView;
           ) : null}
           {task.description ? <p className="mt-0.5 text-sm text-muted-foreground">{task.description}</p> : null}
           {reason ? (
-            <p className="mt-1.5 flex items-start gap-1.5 text-sm text-amber-900">
+            <p className="mt-1.5 flex items-start gap-1.5 text-sm text-warning">
               <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               <span>
                 {reason}
-                <span className="block text-xs text-amber-800/80">
+                <span className="block text-xs text-warning/80">
                   {task.prerequisites.filter((p) => p.status !== "COMPLETED").map((p) => `${p.title} — ${p.ownerName}`).join(" · ")}
                 </span>
               </span>
@@ -103,7 +103,7 @@ export function TaskCard({ task, timezone, showHire = false }: { task: TaskView;
           </p>
           <div aria-live="polite" className="text-sm">
             {error ? <p className="mt-1 text-destructive" role="alert">{error}</p> : null}
-            {done ? <p className="mt-1 text-emerald-700">{done}</p> : null}
+            {done ? <p className="mt-1 text-success">{done}</p> : null}
           </div>
         </div>
       </div>

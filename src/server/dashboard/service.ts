@@ -32,7 +32,7 @@ export async function newHiresWithOpenItRequests(asOf: Date = new Date()) {
       id: true, name: true, countryCode: true, joiningDate: true,
       requestsSubmitted: {
         where: { status: { in: [...OPEN_STATUSES] }, category: { code: "IT_EQUIPMENT" } },
-        select: { id: true, number: true },
+        select: { id: true, number: true, title: true, status: true, createdAt: true },
         orderBy: { number: "asc" },
       },
     },
@@ -44,17 +44,82 @@ export async function newHiresWithOpenItRequests(asOf: Date = new Date()) {
   });
 }
 
+const DAY = 86_400_000;
+export const AGE_BUCKETS = [
+  { key: "fresh", label: "0–2 days", max: 2 },
+  { key: "aging", label: "3–7 days", max: 7 },
+  { key: "stale", label: "8+ days", max: Infinity },
+] as const;
+
+/**
+ * Request flow: open requests by status and age, a 30-day open-backlog series and
+ * week-over-week opened/resolved counts. All derived from stored timestamps
+ * (createdAt, resolvedAt, closedAt); nothing is estimated.
+ */
+async function requestFlow(asOf: Date) {
+  const since = new Date(asOf.getTime() - 31 * DAY);
+  const rows = await db.serviceRequest.findMany({
+    where: { createdAt: { lte: asOf }, OR: [{ status: { in: [...OPEN_STATUSES] } }, { resolvedAt: { gte: since } }, { closedAt: { gte: since } }, { createdAt: { gte: since } }] },
+    select: { status: true, createdAt: true, resolvedAt: true, closedAt: true },
+  });
+  const open = rows.filter((r) => (OPEN_STATUSES as readonly string[]).includes(r.status));
+  const ageDays = (d: Date) => Math.floor((asOf.getTime() - d.getTime()) / DAY);
+  const aging = OPEN_STATUSES.map((status) => {
+    const ages = open.filter((r) => r.status === status).map((r) => ageDays(r.createdAt));
+    return {
+      status,
+      total: ages.length,
+      buckets: AGE_BUCKETS.map((b, i) => ({ key: b.key, label: b.label, count: ages.filter((a) => a <= b.max && (i === 0 || a > AGE_BUCKETS[i - 1].max)).length })),
+    };
+  });
+  const oldestOpenDays = open.length ? Math.max(...open.map((r) => ageDays(r.createdAt))) : 0;
+  // Open backlog at the end of each of the last 30 days (resolved or closed ends "open").
+  const endedAt = (r: (typeof rows)[number]) => r.resolvedAt ?? r.closedAt;
+  const series = Array.from({ length: 30 }, (_, i) => {
+    const t = asOf.getTime() - (29 - i) * DAY;
+    return rows.filter((r) => r.createdAt.getTime() <= t && (!endedAt(r) || endedAt(r)!.getTime() > t)).length;
+  });
+  const inWindow = (d: Date | null, from: number, to: number) => !!d && d.getTime() > asOf.getTime() - from * DAY && d.getTime() <= asOf.getTime() - to * DAY;
+  return {
+    aging,
+    oldestOpenDays,
+    backlogSeries: series,
+    openedLast7: rows.filter((r) => inWindow(r.createdAt, 7, 0)).length,
+    openedPrev7: rows.filter((r) => inWindow(r.createdAt, 14, 7)).length,
+    resolvedLast7: rows.filter((r) => inWindow(r.resolvedAt, 7, 0)).length,
+    resolvedPrev7: rows.filter((r) => inWindow(r.resolvedAt, 14, 7)).length,
+  };
+}
+
+/** Headcount per office with joiners in the last 30 days (by joining date). */
+async function offices(asOf: Date) {
+  const since = new Date(asOf.getTime() - 30 * DAY);
+  const [all, joiners] = await Promise.all([
+    db.user.groupBy({ by: ["countryCode"], _count: { _all: true } }),
+    db.user.groupBy({ by: ["countryCode"], where: { joiningDate: { gte: since, lte: asOf } }, _count: { _all: true } }),
+  ]);
+  const j = new Map(joiners.map((x) => [x.countryCode, x._count._all]));
+  return (Object.keys(COUNTRY_TIMEZONES) as (keyof typeof COUNTRY_TIMEZONES)[]).map((code) => ({
+    countryCode: code,
+    timezone: COUNTRY_TIMEZONES[code],
+    headcount: all.find((a) => a.countryCode === code)?._count._all ?? 0,
+    joinedLast30: j.get(code) ?? 0,
+  }));
+}
+
 export async function orgDashboard(actor: Actor) {
   if (!canViewOrgDashboard(actor)) throw forbidden("The organisation dashboard is available to HR admins.");
   const asOf = new Date();
 
-  const [headcount, byStatus, byCategoryRaw, categories, activeHires, insightRows] = await Promise.all([
+  const [headcount, byStatus, byCategoryRaw, categories, activeHires, insightRows, flow, officeRows] = await Promise.all([
     db.user.groupBy({ by: ["countryCode"], _count: { _all: true }, orderBy: { countryCode: "asc" } }),
     db.serviceRequest.groupBy({ by: ["status"], where: { status: { in: [...OPEN_STATUSES] }, createdAt: { lte: asOf } }, _count: { _all: true } }),
     db.serviceRequest.groupBy({ by: ["categoryId"], where: { status: { in: [...OPEN_STATUSES] }, createdAt: { lte: asOf } }, _count: { _all: true } }),
     db.requestCategory.findMany({ select: { id: true, code: true, name: true }, orderBy: { name: "asc" } }),
     db.onboarding.count({ where: { tasks: { some: { status: { not: "COMPLETED" } } } } }),
     newHiresWithOpenItRequests(asOf),
+    requestFlow(asOf),
+    offices(asOf),
   ]);
   const overdueTasks = await overdueTaskCount({ onboarding: { tasks: { some: { status: { not: "COMPLETED" } } } } }, asOf);
 
@@ -75,7 +140,12 @@ export async function orgDashboard(actor: Actor) {
       requestIds: u.requestsSubmitted.map((r) => r.id),
       requestNumbers: u.requestsSubmitted.map((r) => r.number),
       openRequestCount: u.requestsSubmitted.length,
+      daysSinceJoining: daysBetween(formatDateOnly(u.joiningDate), todayIn(COUNTRY_TIMEZONES[u.countryCode], asOf)),
+      longestWaitDays: Math.max(...u.requestsSubmitted.map((r) => Math.floor((asOf.getTime() - r.createdAt.getTime()) / DAY))),
+      requests: u.requestsSubmitted.map((r) => ({ id: r.id, number: r.number, title: r.title, status: r.status })),
     })),
+    requestFlow: flow,
+    offices: officeRows,
     asOf: asOf.toISOString(),
   };
 }

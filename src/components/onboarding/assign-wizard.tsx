@@ -136,7 +136,7 @@ export function AssignWizard({ templates, employees, initialEmployeeId }: { temp
           </div>
           <div className="flex items-center gap-3">
             <Button onClick={confirm} disabled={pending}>{pending ? "Assigning…" : "Confirm and assign"}</Button>
-            {missing ? <span className="text-sm text-amber-900">{missing} task(s) still need an owner.</span> : null}
+            {missing ? <span className="text-sm text-warning">{missing} task(s) still need an owner.</span> : null}
           </div>
         </section>
       ) : null}

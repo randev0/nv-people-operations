@@ -62,7 +62,7 @@ export function RequestHeaderActions({ request }: { request: ReqInfo }) {
       </div>
       <div aria-live="polite" className="text-sm">
         {error ? <p className="text-destructive" role="alert">{error}</p> : null}
-        {success ? <p className="flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-4 w-4" aria-hidden />{success}</p> : null}
+        {success ? <p className="flex items-center gap-1 text-success"><CheckCircle2 className="h-4 w-4" aria-hidden />{success}</p> : null}
       </div>
     </div>
   );
@@ -122,7 +122,7 @@ export function AssignmentPanel({ request, suggestion }: { request: ReqInfo; sug
           ) : null}
           <div aria-live="polite">
             {loadError || error ? <p className="text-destructive" role="alert">{loadError ?? error}</p> : null}
-            {success ? <p className="flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-4 w-4" aria-hidden />{success}</p> : null}
+            {success ? <p className="flex items-center gap-1 text-success"><CheckCircle2 className="h-4 w-4" aria-hidden />{success}</p> : null}
           </div>
         </div>
       </Panel>

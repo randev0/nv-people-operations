@@ -71,7 +71,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: SP 
       </nav>
 
       {params.insight === "new-hires-it" ? (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-200 bg-accent px-4 py-2.5 text-sm text-accent-foreground">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-info/30 bg-accent px-4 py-2.5 text-sm text-accent-foreground">
           <span>Showing the records behind the dashboard insight: <strong>open IT equipment requests from new hires</strong> (joined in the last 60 days, onboarding assigned).</span>
           <Link href={`/requests?${qs({ insight: undefined })}`} className="inline-flex items-center gap-1 font-medium hover:underline"><X className="h-3.5 w-3.5" aria-hidden />Clear</Link>
         </div>

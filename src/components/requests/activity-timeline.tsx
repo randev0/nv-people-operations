@@ -22,7 +22,7 @@ export function ActivityTimeline({ comments, events }: { comments: Comment[]; ev
           <li key={it.id} className="relative flex gap-3">
             <span className="relative z-10 rounded-full bg-background p-1"><Avatar name={it.c.author.name} /></span>
             <article className="min-w-0 flex-1 rounded-lg border bg-card">
-              <header className="flex flex-wrap items-center gap-x-2 border-b bg-[hsl(40_18%_98.5%)] px-3 py-2 text-xs">
+              <header className="flex flex-wrap items-center gap-x-2 border-b bg-white/[0.02] px-3 py-2 text-xs">
                 <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                 <span className="font-semibold text-foreground">{it.c.author.name}</span>
                 <span className="text-muted-foreground">commented</span>

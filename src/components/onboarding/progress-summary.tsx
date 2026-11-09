@@ -16,10 +16,10 @@ export function ProgressSummary({ p }: { p: P; compact?: boolean }) {
 /** Four overlapping counts: completed, pending, overdue, blocked. */
 export function ProgressCounts({ p, className }: { p: P; className?: string }) {
   const items = [
-    { label: "Completed", value: p.completed, tone: "text-emerald-700" },
+    { label: "Completed", value: p.completed, tone: "text-success" },
     { label: "Pending", value: p.pending, tone: "text-foreground" },
-    { label: "Overdue", value: p.overdue, tone: p.overdue ? "text-red-700" : "text-foreground" },
-    { label: "Blocked", value: p.blocked, tone: p.blocked ? "text-amber-800" : "text-foreground" },
+    { label: "Overdue", value: p.overdue, tone: p.overdue ? "text-danger" : "text-foreground" },
+    { label: "Blocked", value: p.blocked, tone: p.blocked ? "text-warning" : "text-foreground" },
   ];
   return (
     <dl className={cn("grid grid-cols-2 rounded-md border bg-card sm:grid-cols-4 sm:divide-x [&>div:nth-child(-n+2)]:border-b sm:[&>div:nth-child(-n+2)]:border-b-0 [&>div:nth-child(odd)]:border-r sm:[&>div:nth-child(odd)]:border-r-0", className)}>

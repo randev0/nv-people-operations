@@ -72,9 +72,9 @@ export function AiSuggestionPanel({
   if (s.status === "NONE" && !s.canRegenerate) return null;
 
   return (
-    <section className="rounded-lg border border-indigo-200 bg-card p-4 text-sm shadow-[0_1px_2px_rgba(28,25,23,0.04)]" aria-labelledby="ai-sugg" aria-live="polite">
+    <section className="rounded-lg border border-info/30 bg-card p-4 text-sm" aria-labelledby="ai-sugg" aria-live="polite">
       <h2 id="ai-sugg" className="flex items-center gap-1.5 text-sm font-semibold">
-        <Sparkles className="h-4 w-4 text-primary" aria-hidden /> AI routing suggestion
+        <Sparkles className="h-4 w-4 text-link" aria-hidden /> AI routing suggestion
       </h2>
       {s.status === "PENDING" ? <p className="mt-2 text-muted-foreground">Analysing the description…</p> : null}
       {s.status === "NONE" ? <p className="mt-2 text-muted-foreground">No suggestion yet.</p> : null}
@@ -93,12 +93,12 @@ export function AiSuggestionPanel({
             <dt className="text-muted-foreground">Category</dt>
             <dd>
               {s.category?.name ?? "—"}
-              {s.category && s.category.id !== currentCategoryId ? <span className="text-amber-900"> (submitted under a different category)</span> : null}
+              {s.category && s.category.id !== currentCategoryId ? <span className="text-warning"> (submitted under a different category)</span> : null}
             </dd>
             <dt className="text-muted-foreground">Priority</dt>
             <dd>
               {s.priority ? PRIORITY_LABEL[s.priority] : "—"}
-              {s.priority && s.priority !== currentPriority ? <span className="text-amber-900"> (submitted as {PRIORITY_LABEL[currentPriority]})</span> : null}
+              {s.priority && s.priority !== currentPriority ? <span className="text-warning"> (submitted as {PRIORITY_LABEL[currentPriority]})</span> : null}
             </dd>
           </dl>
           {s.explanation ? <p className="mt-2 whitespace-pre-wrap">{s.explanation}</p> : null}
