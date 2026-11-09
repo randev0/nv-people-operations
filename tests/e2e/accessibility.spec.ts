@@ -87,10 +87,19 @@ const PAGES: { who: string; paths: string[] }[] = [
   { who: "employee.my@example.com", paths: ["/dashboard", "/requests", "/requests/new", "/my-work", "/onboarding"] },
   { who: "manager.my@example.com", paths: ["/dashboard", "/requests?scope=team", "/onboarding", "/employees"] },
   { who: "hr.admin@example.com", paths: ["/dashboard", "/dashboard?queue=all", "/onboarding/overdue", "/requests?scope=all", "/templates", "/onboarding/assign", "/employees"] },
+  { who: "it.owner@example.com", paths: ["/my-work", "/my-work?kind=request"] },
 ];
 
+/** Request pages as each role sees them: requester, assigner (Assign block + AI) and assignee (Start/Resolve). */
+const DETAIL_QUERY: Record<string, string> = {
+  "employee.my@example.com": "scope=mine",
+  "manager.my@example.com": "scope=team&status=SUBMITTED",
+  "hr.admin@example.com": "scope=all&status=SUBMITTED",
+  "it.owner@example.com": "scope=assigned&status=IN_PROGRESS",
+};
+
 test("automated accessibility scan (axe, WCAG 2.1 A/AA): no serious or critical violations", async ({ page }) => {
-  test.setTimeout(120_000); // 20 pages × sign-in + scan
+  test.setTimeout(150_000); // ~24 pages × sign-in + scan
   const report: string[] = [];
   const scanned: string[] = ["/login"];
   await page.goto("/login");
@@ -98,10 +107,11 @@ test("automated accessibility scan (axe, WCAG 2.1 A/AA): no serious or critical 
   for (const v of login.violations) report.push(`/login ${v.impact} ${v.id}: ${v.nodes.length} node(s)`);
   for (const { who, paths } of PAGES) {
     await signIn(page, who);
-    // include one detail page per role
+    // include one request page per role, in the state that role acts on
     const extra: string[] = [];
-    const firstReq = await page.evaluate(async () => (await (await fetch("/api/requests?pageSize=1&scope=mine")).json()).data?.[0]?.id);
-    if (firstReq) extra.push(`/requests/${firstReq}`);
+    const firstReq = await page.evaluate(async (q) => (await (await fetch(`/api/requests?pageSize=1&${q}`)).json()).data?.[0]?.id, DETAIL_QUERY[who]);
+    expect(firstReq, `a request page to scan for ${who}`).toBeTruthy();
+    extra.push(`/requests/${firstReq}`);
     for (const path of [...paths, ...extra]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
@@ -112,8 +122,8 @@ test("automated accessibility scan (axe, WCAG 2.1 A/AA): no serious or critical 
     }
     await page.context().clearCookies();
   }
-  console.log(`axe scanned ${scanned.length} pages`);
+  console.log(`axe scanned ${scanned.length} pages: ${scanned.filter((p) => p.startsWith("/requests/")).join(", ")}`);
   console.log(report.length ? report.join("\n") : "axe: no violations");
-  expect(scanned.length).toBeGreaterThanOrEqual(18);
+  expect(scanned.length).toBeGreaterThanOrEqual(23); // login + 18 fixed pages + 4 request pages
   expect(report.filter((l) => / (serious|critical) /.test(l))).toEqual([]);
 });

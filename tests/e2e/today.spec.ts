@@ -152,8 +152,9 @@ test("IT owner: own work in rule order, action confirms and refreshes, title ope
   await expect(status).toContainText("Your list has been updated.");
   await expect
     .poll(async () => {
-      const row = rows.filter({ has: page.locator(`a[href="${href}"]`) });
-      return (await row.count()) === 0 ? "gone" : (await row.getByRole("button").innerText()).trim();
+      // allInnerTexts() does not wait: innerText() would block if the row vanished between calls.
+      const labels = await rows.filter({ has: page.locator(`a[href="${href}"]`) }).getByRole("button").allInnerTexts();
+      return labels.length === 0 ? "gone" : labels[0].trim();
     }, { timeout: 15_000, message: "row should leave the list or offer its next step after the refresh" })
     .not.toBe(before);
   const link = rows.first().getByRole("link").first();
