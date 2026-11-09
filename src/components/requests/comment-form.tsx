@@ -1,5 +1,6 @@
 "use client";
 
+import { CharCount } from "@/components/common/char-count";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ export function CommentForm({ requestId }: { requestId: string }) {
     <form onSubmit={submit} className="space-y-2">
       <Label htmlFor="comment" className="text-sm font-semibold">Add a comment</Label>
       <Textarea id="comment" rows={3} maxLength={3000} value={body} onChange={(e) => setBody(e.target.value)} />
+      <CharCount value={body} max={3000} />
       {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
       <Button type="submit" size="sm" disabled={pending || !body.trim()}>{pending ? "Posting…" : "Post comment"}</Button>
     </form>

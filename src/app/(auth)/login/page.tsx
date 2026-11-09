@@ -26,8 +26,15 @@ function Logo() {
  * Sign-in: a minimal abstract photo panel carrying the logo on the left (free Unsplash
  * photo, no attribution required; source recorded in THIRD_PARTY_NOTICES) and the form on the right.
  */
-export default async function LoginPage() {
-  if (await getCurrentUser()) redirect("/dashboard");
+/** Only same-site paths are accepted as a return target (no open redirects). */
+function safeNext(v: string | string[] | undefined): string {
+  const s = Array.isArray(v) ? v[0] : v;
+  return s && s.startsWith("/") && !s.startsWith("//") && !s.startsWith("/\\") && !s.startsWith("/login") ? s.slice(0, 500) : "/dashboard";
+}
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const next = safeNext((await searchParams).next);
+  if (await getCurrentUser()) redirect(next);
   return (
     <main className="grid min-h-screen gap-3 bg-background p-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
       <section className="relative hidden min-h-[calc(100vh-24px)] overflow-hidden rounded-[28px] border border-white/[0.06] lg:block">
@@ -50,7 +57,8 @@ export default async function LoginPage() {
               <h1 className="text-[34px] font-semibold leading-[1.1] tracking-[-0.04em]">Welcome back</h1>
               <p className="mt-2 text-[15px] text-muted-foreground">Sign in to your workspace with your work email.</p>
             </div>
-            <LoginForm />
+            {next !== "/dashboard" ? <p className="mb-4 text-center text-sm text-muted-foreground">Sign in to continue where you left off.</p> : null}
+            <LoginForm next={next} />
             <details className="mt-8 rounded-2xl border bg-card/60 p-4 text-sm">
               <summary className="cursor-pointer font-medium">Demo accounts (synthetic data)</summary>
               <p className="mt-2 text-muted-foreground">The shared demo password is listed in the README.</p>

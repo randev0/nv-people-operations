@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { api, errorText } from "@/lib/api";
+import { api, ApiError, errorText } from "@/lib/api";
 import { PRIORITY_LABEL } from "@/lib/format";
 
 export type Suggestion = {
@@ -11,7 +12,7 @@ export type Suggestion = {
   category: { id: string; code: string; name: string } | null;
   priority: string | null;
   suggestedDepartment: { id: string; name: string } | null;
-  suggestedAssignee: { id: string; name: string; department: { id: string; name: string } } | null;
+  suggestedAssignee: { id: string; name: string; department: { id: string; name: string }; inCurrentTeam?: boolean } | null;
   explanation: string | null;
   failureReason: string | null;
   canRegenerate: boolean;
@@ -27,13 +28,36 @@ export function AiSuggestionPanel({
   currentCategoryId,
   currentPriority,
   onUsePerson,
+  version,
+  onCategoryChanged,
 }: {
   requestId: string;
   initial: Suggestion;
   currentCategoryId: string;
   currentPriority: string;
   onUsePerson?: (id: string) => void;
+  /** Request version, needed to move the request to the AI's category. */
+  version?: number;
+  /** Called after the category changed (default: refresh the page). */
+  onCategoryChanged?: () => void;
 }) {
+  const router = useRouter();
+  const [moving, setMoving] = useState(false);
+  async function useCategory() {
+    if (!s.category || version === undefined) return;
+    setMoving(true);
+    setError(null);
+    try {
+      await api(`/requests/${requestId}/category`, { method: "POST", body: { categoryId: s.category.id, expectedVersion: version } });
+      if (onCategoryChanged) onCategoryChanged();
+      else router.refresh();
+    } catch (err) {
+      setError(errorText(err));
+      if (err instanceof ApiError && err.code === "STALE_VERSION") router.refresh();
+    } finally {
+      setMoving(false);
+    }
+  }
   const [s, setS] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +130,12 @@ export function AiSuggestionPanel({
         </div>
         {s.canRegenerate ? (
           <div className="flex shrink-0 flex-wrap gap-2">
-            {s.status === "READY" && person && onUsePerson ? (
+            {s.status === "READY" && catDiffers && onUsePerson && version !== undefined ? (
+              <Button size="sm" type="button" variant="outline" onClick={useCategory} disabled={moving}>
+                {moving ? "Moving…" : `Move to ${s.category?.name}`}
+              </Button>
+            ) : null}
+            {s.status === "READY" && person && person.inCurrentTeam !== false && onUsePerson ? (
               <Button size="sm" type="button" onClick={() => onUsePerson(person.id)}>
                 Use {person.name.split(" ")[0]} as assignee
               </Button>

@@ -1,4 +1,4 @@
-import { requireUser } from "@/server/auth/current-user";
+import { requirePageUser as requireUser } from "@/server/auth/page-user";
 import { listCategories } from "@/server/requests/service";
 import { listDepartments } from "@/server/people/service";
 import { PageHeader } from "@/components/common/page-header";

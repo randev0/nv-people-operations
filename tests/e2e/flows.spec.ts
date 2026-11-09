@@ -107,7 +107,8 @@ test("HR creates a template in the editor; a dependency loop is flagged and reje
   await expect(page.getByText(/Dependency cycle/).first()).toBeVisible();
   await t1.getByLabel("Assemble desk").uncheck();
   await page.getByRole("button", { name: "Create template" }).click();
-  await page.waitForURL("**/templates");
+  await page.waitForURL("**/templates?saved=*");
+  await expect(page.getByRole("status")).toContainText("Saved “E2E template” (version 1)");
   await expect(page.getByRole("link", { name: "E2E template" })).toBeVisible();
   // Relative deadlines read the way HR writes them (Day 1 / Week 1 / Day 30).
   await page.getByRole("link", { name: "Standard Employee Onboarding" }).click();
@@ -137,4 +138,41 @@ test("U01: key screens fit a 390px viewport without horizontal scrolling", async
   await page.getByRole("button", { name: "Open menu" }).click();
   await expect(page.getByRole("link", { name: "Templates" }).first()).toBeVisible();
   await ctx.close();
+});
+
+test("error handling: branded 404, session expiry banner returns you to the page, phone menu closes with Escape", async ({ page, context }) => {
+  // Unknown address outside the app: branded page with a way back.
+  const r = await page.goto("/no-such-page");
+  expect(r?.status()).toBe(404);
+  await expect(page.getByRole("heading", { name: "This page doesn't exist" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Go to the dashboard" })).toBeVisible();
+
+  // Signed-out visit to a deep link → sign in → back to that page.
+  await page.goto("/requests?scope=mine&status=OPEN");
+  await expect(page).toHaveURL(/\/login\?next=/);
+  await expect(page.getByText("Sign in to continue where you left off.")).toBeVisible();
+  await page.getByLabel("Email").fill("employee.my@example.com");
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/requests\?scope=mine&status=OPEN$/);
+
+  // Session ends while working: the banner appears, typed text is kept.
+  await page.goto("/requests/new");
+  await page.getByLabel("Title").fill("Typed before expiry");
+  await page.getByLabel("Description").fill("This text must survive the session ending.");
+  await page.getByLabel("Category").selectOption({ index: 1 });
+  await context.clearCookies();
+  await page.getByRole("button", { name: "Submit request" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Your session has ended" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in again" })).toHaveAttribute("href", /\/login\?next=%2Frequests%2Fnew/);
+  await expect(page.getByLabel("Title")).toHaveValue("Typed before expiry");
+
+  // Phone: the menu drawer closes with Escape and gives focus back to the menu button.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, "employee.my@example.com");
+  const menu = page.getByRole("button", { name: "Open menu" });
+  await menu.click();
+  await expect(page.getByRole("button", { name: "Close menu" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Open menu" })).toBeFocused();
 });

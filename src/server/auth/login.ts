@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { db } from "../db";
-import { AppError, rateLimited } from "../errors";
+import { AppError } from "../errors";
 import { env } from "../env";
 import { employeeSelect, toEmployeeDTO, type EmployeeDTO } from "../people/dto";
 import { verifyPassword } from "./password";
@@ -22,7 +22,10 @@ export async function login(input: z.infer<typeof loginSchema>, ip: string): Pro
   // source addresses or spoofed forwarding headers cannot remove the cap.
   const perIp = await hitLoginThrottle(input.email, ip, env.loginWindowMinutes());
   const perAccount = await hitLoginThrottle(input.email, "*", env.loginWindowMinutes());
-  if (perIp > env.loginLimit() || perAccount > env.loginLimit() * 3) throw rateLimited();
+  if (perIp > env.loginLimit() || perAccount > env.loginLimit() * 3) {
+    const mins = env.loginWindowMinutes();
+    throw new AppError(429, "RATE_LIMITED", `Too many sign-in attempts. Try again in ${mins} minute${mins === 1 ? "" : "s"}, or ask your HR admin.`);
+  }
 
   const user = await db.user.findUnique({
     where: { email: input.email },

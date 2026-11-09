@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Lock } from "lucide-react";
-import { requireUser } from "@/server/auth/current-user";
+import { requirePageUser as requireUser } from "@/server/auth/page-user";
 import { isHrAdmin } from "@/server/auth/permissions";
 import { overdueTasksInScope } from "@/server/dashboard/service";
 import { load, sp } from "@/server/page";

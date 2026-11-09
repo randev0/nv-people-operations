@@ -99,10 +99,11 @@ test("HR assigns from the side panel; confirmation, counts and the next row upda
   const select = sheet.getByLabel("Assign to");
   await expect(select).toBeEnabled();
   const groups = await select.locator("optgroup").evaluateAll((gs) => gs.map((g) => g.getAttribute("label")));
-  expect(groups.at(-1)).toBe("Everyone else");
-  expect(groups.some((g) => /team \(handles this category\)$/.test(g ?? ""))).toBe(true);
+  // Only the category's own team is offered (plus the AI pick, if it is in that team).
+  expect(groups.at(-1)).toMatch(/team \(handles this category\)$/);
+  expect(groups.every((g) => g === "Suggested by AI" || /team \(handles this category\)$/.test(g ?? ""))).toBe(true);
   const total = await select.locator("option").count();
-  await sheet.getByLabel("Find a person").fill("IT");
+  await sheet.getByLabel("Find a person").fill("MY");
   await expect(sheet.getByText(/^\d+ matching (person|people)$/)).toBeVisible();
   expect(await select.locator("option").count()).toBeLessThan(total);
   await sheet.getByLabel("Find a person").fill("");
@@ -154,8 +155,14 @@ test("HR bulk-assigns two requests after Select; selection count and bar appear 
   await attention(page).getByRole("button", { name: "Select", exact: true }).click();
   await expect(panelRows(page)).toHaveCount(before); // selection lists every assignable request
   await expect(attention(page).getByText(`0 of ${before} selected`)).toBeVisible();
-  await panelRows(page).nth(0).getByRole("checkbox").check();
-  await panelRows(page).nth(1).getByRole("checkbox").check();
+  // Bulk assignment needs one team for all: pick two requests from the same category.
+  const texts = await panelRows(page).allInnerTexts();
+  const cat = (t: string) => t.split("\n").find((l) => l.includes(" · "))?.split(" · ")[1];
+  const pair = texts.map((t, i) => [cat(t), i] as const).find(([c, i]) => texts.some((u, j) => j > i && cat(u) === c));
+  test.skip(!pair, "needs two unassigned requests in one category");
+  const second = texts.findIndex((u, j) => j > pair![1] && cat(u) === pair![0]);
+  await panelRows(page).nth(pair![1]).getByRole("checkbox").check();
+  await panelRows(page).nth(second).getByRole("checkbox").check();
   await expect(attention(page).getByText(`2 of ${before} selected`)).toBeVisible();
   const bar = page.getByRole("region", { name: "Bulk assign" });
   await expect(bar).toContainText("2 selected");

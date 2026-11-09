@@ -59,7 +59,7 @@ export function assertSameOrigin(req: Request) {
 }
 
 function mapKnownErrors(err: unknown): unknown {
-  if (err instanceof z.ZodError) return badRequest("Invalid input.", zodFieldErrors(err));
+  if (err instanceof z.ZodError) return badRequest("Some fields need attention.", zodFieldErrors(err));
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
     return new AppError(404, "NOT_FOUND", "Record not found.");
   }
@@ -70,9 +70,34 @@ export function zodFieldErrors(err: z.ZodError): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const issue of err.issues) {
     const key = issue.path.join(".") || "_";
-    (out[key] ??= []).push(issue.message);
+    (out[key] ??= []).push(friendlyIssue(issue));
   }
   return out;
+}
+
+/** Plain-language validation messages (the library's defaults are written for developers). */
+export function friendlyIssue(issue: z.core.$ZodIssue): string {
+  const i = issue as z.core.$ZodIssue & { minimum?: number | bigint; maximum?: number | bigint; origin?: string; format?: string; keys?: string[]; input?: unknown };
+  switch (issue.code) {
+    case "too_small":
+      if (i.origin === "string") return Number(i.minimum) <= 1 ? "This field is required." : `Needs at least ${i.minimum} characters.`;
+      if (i.origin === "array") return Number(i.minimum) <= 1 ? "Add at least one." : `Add at least ${i.minimum}.`;
+      return `Must be at least ${i.minimum}.`;
+    case "too_big":
+      if (i.origin === "string") return `Keep it to ${i.maximum} characters or fewer.`;
+      if (i.origin === "array") return `No more than ${i.maximum} allowed.`;
+      return `Must be ${i.maximum} or less.`;
+    case "invalid_type":
+      return i.input === undefined || i.input === null ? "This field is required." : "This value has the wrong format.";
+    case "invalid_format":
+      return i.format === "email" ? "Enter a valid email address." : i.format === "uuid" ? "Choose an option from the list." : "This value has the wrong format.";
+    case "invalid_value":
+      return "Choose one of the options.";
+    case "unrecognized_keys":
+      return `Unexpected field${(i.keys?.length ?? 0) === 1 ? "" : "s"}: ${(i.keys ?? []).join(", ")}.`;
+    default:
+      return issue.message;
+  }
 }
 
 export async function readJson<S extends z.ZodTypeAny>(req: Request, schema: S): Promise<z.infer<S>> {
@@ -83,7 +108,7 @@ export async function readJson<S extends z.ZodTypeAny>(req: Request, schema: S):
     throw badRequest("Request body must be valid JSON.");
   }
   const parsed = schema.safeParse(body);
-  if (!parsed.success) throw badRequest("Invalid input.", zodFieldErrors(parsed.error));
+  if (!parsed.success) throw badRequest("Some fields need attention.", zodFieldErrors(parsed.error));
   return parsed.data;
 }
 

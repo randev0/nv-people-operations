@@ -33,7 +33,7 @@ function useAction() {
       onDone?.();
     } catch (err) {
       setError(errorText(err));
-      if (err instanceof ApiError && err.code === "STALE_VERSION") router.refresh();
+      if (err instanceof ApiError && (err.code === "STALE_VERSION" || err.code === "INVALID_TRANSITION")) router.refresh();
       onFail?.(err);
     } finally {
       setPending(null);
@@ -63,19 +63,21 @@ export function RequestHeaderActions({ request }: { request: ReqInfo }) {
       </div>
       <div aria-live="polite" className="text-sm">
         {error ? <p className="text-destructive" role="alert">{error}</p> : null}
-        {success ? <p className="flex items-center gap-1 text-success"><CheckCircle2 className="h-4 w-4" aria-hidden />{success}</p> : null}
+        {success ? <p role="status" className="flex items-center gap-1 text-success"><CheckCircle2 className="h-4 w-4" aria-hidden />{success}</p> : null}
       </div>
     </div>
   );
 }
 
 /** "Next step" content for assigners: AI routing note, person search and picker on one line. */
-export function AssignmentPanel({ request, suggestion, onAssigned, onConflict }: {
+export function AssignmentPanel({ request, suggestion, onAssigned, onConflict, onCategoryChanged }: {
   request: ReqInfo;
   suggestion: Suggestion;
   onAssigned?: (assigneeName: string) => void;
   /** Called when the server refuses because the request changed (stale version or no longer assignable). */
   onConflict?: () => void;
+  /** Called after the assigner moved the request to the AI's category (default: refresh). */
+  onCategoryChanged?: () => void;
 }) {
   const { pending, error, success, run } = useAction();
   const [options, setOptions] = useState<Option[] | null>(null);
@@ -110,13 +112,12 @@ export function AssignmentPanel({ request, suggestion, onAssigned, onConflict }:
   const groups = [
     { label: "Suggested by AI", people: eligible.filter((o) => o.id === aiId) },
     { label: `${eligible.find((o) => o.department.id === teamDeptId)?.department.name ?? "Request's"} team (handles this category)`, people: eligible.filter((o) => o.id !== aiId && o.department.id === teamDeptId) },
-    { label: "Everyone else", people: eligible.filter((o) => o.id !== aiId && o.department.id !== teamDeptId) },
   ].map((g) => ({ ...g, people: g.people.filter(matches) })).filter((g) => g.people.length);
   const shown = groups.reduce((n, g) => n + g.people.length, 0);
 
   function applyPerson(id: string, list: Option[]) {
     if (list.some((o) => o.id === id)) setAssigneeId(id);
-    else setLoadError("The suggested person is not an eligible assignee for this request.");
+    else setLoadError("The suggested person can't take this request (not in this category's team, or no longer active). Choose someone from the list.");
   }
 
   const ai = (
@@ -126,6 +127,9 @@ export function AssignmentPanel({ request, suggestion, onAssigned, onConflict }:
       currentCategoryId={request.categoryId}
       currentPriority={request.priority}
       onUsePerson={canAssign ? (id) => (options ? applyPerson(id, options) : setWanted(id)) : undefined}
+      version={request.version}
+      onCategoryChanged={onCategoryChanged}
+      key={`${request.categoryId}:${request.version}`}
     />
   );
 
@@ -177,11 +181,11 @@ export function AssignmentPanel({ request, suggestion, onAssigned, onConflict }:
         </Button>
       </form>
       <p id="assignee-count" className="text-xs text-muted-foreground" aria-live="polite">
-        {options ? (needle ? `${shown} matching ${shown === 1 ? "person" : "people"}` : "The AI-suggested person and the request's team are listed first.") : "Loading people…"}
+        {options ? (needle ? `${shown} matching ${shown === 1 ? "person" : "people"}` : `Only the ${eligible[0]?.department.name ?? "category's"} team handles this category. The AI-suggested person is listed first.`) : "Loading people…"}
       </p>
       <div aria-live="polite" className="text-sm">
         {loadError || error ? <p className="text-destructive" role="alert">{loadError ?? error}</p> : null}
-        {success ? <p className="flex items-center gap-1 text-success"><CheckCircle2 className="h-4 w-4" aria-hidden />{success}</p> : null}
+        {success ? <p role="status" className="flex items-center gap-1 text-success"><CheckCircle2 className="h-4 w-4" aria-hidden />{success}</p> : null}
       </div>
     </div>
   );

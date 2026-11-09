@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/server/auth/current-user";
+import { requirePageUser as requireUser } from "@/server/auth/page-user";
 import { isHrAdmin } from "@/server/auth/permissions";
 import { listDepartments, listEmployees, managerOptions } from "@/server/people/service";
 import { listEmployeesQuery } from "@/server/people/schemas";

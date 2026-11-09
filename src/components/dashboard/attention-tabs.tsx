@@ -135,7 +135,7 @@ export function AttentionTabs({ tabs, initial }: { tabs: AttentionTab[]; initial
               setSelecting(false);
               setPicked([]);
               router.refresh();
-              announce(text, !text.includes("Not assigned"));
+              announce(text, !/Not assigned|Skipped/.test(text));
             }}
           />
         ) : tab.key === "followups" ? (

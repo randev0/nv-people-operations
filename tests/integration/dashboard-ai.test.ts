@@ -134,8 +134,18 @@ test("stored suggestion: generated after submit, person shown only to assigners,
   assert.equal(regen.status, 200);
   assert.equal(regen.json.data.status, "READY");
 
+  // The suggested IT person is not in the team that handles "Other", so assigning them
+  // is refused until the request is moved to the AI's category (recorded in the activity).
+  assert.equal(asManager.suggestedAssignee.inCurrentTeam, false);
+  const refused = await mgr.post(`/requests/${id}/assign`, { assigneeId: asManager.suggestedAssignee.id, expectedVersion: 1 });
+  assert.equal(refused.status, 422, "only the category's team is eligible");
+  const moved = await mgr.post(`/requests/${id}/category`, { categoryId: asManager.category.id, expectedVersion: 1 });
+  assert.equal(moved.status, 200);
+  assert.equal(moved.json.data.category.code, "IT_EQUIPMENT");
+  const note = await db.requestComment.findFirst({ where: { requestId: id }, orderBy: { createdAt: "desc" } });
+  assert.match(note!.body, /from Other to IT equipment/);
   // The manager can then assign the suggested person through the normal, authorised path.
-  const a = await mgr.post(`/requests/${id}/assign`, { assigneeId: asManager.suggestedAssignee.id, expectedVersion: 1 });
+  const a = await mgr.post(`/requests/${id}/assign`, { assigneeId: asManager.suggestedAssignee.id, expectedVersion: 2 });
   assert.equal(a.status, 200);
   assert.equal(a.json.data.assignee.id, asManager.suggestedAssignee.id);
 });

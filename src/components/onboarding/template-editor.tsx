@@ -62,11 +62,14 @@ export function TemplateEditor({ departments, template }: { departments: Dept[];
       [n[i], n[j]] = [n[j], n[i]];
       return n;
     });
-  const remove = (i: number) =>
-    setTasks((ts) => {
-      const key = ts[i].key;
-      return ts.filter((_, j) => j !== i).map((t) => ({ ...t, prerequisiteKeys: t.prerequisiteKeys.filter((p) => p !== key) }));
-    });
+  const [notice, setNotice] = useState<string | null>(null);
+  const remove = (i: number) => {
+    const key = tasks[i].key;
+    const dependents = tasks.filter((t) => t.prerequisiteKeys.includes(key)).map((t) => `“${t.title || "Untitled task"}”`);
+    if (dependents.length && !window.confirm(`${dependents.join(", ")} ${dependents.length === 1 ? "waits" : "wait"} for “${tasks[i].title || "this task"}”. Remove it anyway? ${dependents.length === 1 ? "That task" : "Those tasks"} will no longer wait for anything from it.`)) return;
+    setTasks((ts) => ts.filter((_, j) => j !== i).map((t) => ({ ...t, prerequisiteKeys: t.prerequisiteKeys.filter((p) => p !== key) })));
+    setNotice(dependents.length ? `Removed “${tasks[i].title || "task"}”. ${dependents.join(", ")} no longer ${dependents.length === 1 ? "has" : "have"} it as a prerequisite; check their prerequisites before saving.` : null);
+  };
   const add = () =>
     setTasks((ts) => {
       let key = `task-${ts.length + 1}`;
@@ -81,12 +84,10 @@ export function TemplateEditor({ departments, template }: { departments: Dept[];
     setFieldErrors({});
     const payload = { name, description, tasks: tasks.map((t, i) => ({ ...t, sortOrder: i })) };
     try {
-      if (template) {
-        await api(`/onboarding-templates/${template.id}`, { method: "PUT", body: { ...payload, isActive, expectedVersion: template.version } });
-      } else {
-        await api("/onboarding-templates", { method: "POST", body: payload });
-      }
-      router.push("/templates");
+      const saved = template
+        ? await api<{ name: string; version: number }>(`/onboarding-templates/${template.id}`, { method: "PUT", body: { ...payload, isActive, expectedVersion: template.version } })
+        : await api<{ name: string; version: number }>("/onboarding-templates", { method: "POST", body: payload });
+      router.push(`/templates?saved=${encodeURIComponent(`${saved.name}|${saved.version}`)}`);
       router.refresh();
     } catch (err) {
       if (err instanceof ApiError && err.fieldErrors) setFieldErrors(err.fieldErrors);
@@ -123,6 +124,7 @@ export function TemplateEditor({ departments, template }: { departments: Dept[];
           <h2 className="font-medium">Tasks ({tasks.length}/30)</h2>
           <Button type="button" variant="outline" size="sm" onClick={add} disabled={tasks.length >= 30}>Add task</Button>
         </div>
+        {notice ? <p role="status" className="rounded-xl border border-warning/35 bg-warning/10 px-3 py-2 text-sm">{notice}</p> : null}
         {cycle ? <Alert><AlertDescription>These prerequisites form a loop: {cycle}. Remove one of the links.</AlertDescription></Alert> : null}
         {fe("tasks") ? <p className="text-sm text-destructive">{fe("tasks")}</p> : null}
         {tasks.length === 0 ? <p className="text-sm text-muted-foreground">Add at least one task.</p> : null}

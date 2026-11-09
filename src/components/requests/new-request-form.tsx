@@ -1,5 +1,6 @@
 "use client";
 
+import { CharCount } from "@/components/common/char-count";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -88,11 +89,13 @@ export function NewRequestForm({ categories, departments }: { categories: Catego
         <div className="space-y-1.5">
           <Label htmlFor="title">Title</Label>
           <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={160} required aria-invalid={Boolean(fe("title"))} aria-describedby={fe("title") ? "title-err" : undefined} />
+          <CharCount value={title} max={160} />
           {fe("title") ? <p id="title-err" className="text-sm text-destructive">{fe("title")}</p> : null}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="description">Description</Label>
           <Textarea id="description" rows={6} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={5000} required aria-invalid={Boolean(fe("description"))} aria-describedby={fe("description") ? "desc-err" : undefined} />
+          <CharCount value={description} max={5000} />
           {fe("description") ? <p id="desc-err" className="text-sm text-destructive">{fe("description")}</p> : null}
         </div>
         <div className="grid gap-4 sm:grid-cols-2">

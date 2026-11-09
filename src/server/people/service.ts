@@ -93,10 +93,13 @@ export async function createEmployee(actor: Actor, input: CreateEmployeeInput): 
 
 export async function updateEmployee(actor: Actor, id: string, input: UpdateEmployeeInput): Promise<EmployeeDTO> {
   if (!canManageEmployees(actor)) throw forbidden("Only HR admins can edit employees.");
-  const existing = await db.user.findUnique({ where: { id }, select: { id: true, role: true, loginEnabled: true, _count: { select: { directReports: true } } } });
+  const existing = await db.user.findUnique({ where: { id }, select: { id: true, name: true, role: true, loginEnabled: true, departmentId: true, _count: { select: { directReports: true } } } });
   if (!existing) throw notFound("Employee");
   await assertRefs(input);
   if (input.managerId !== undefined) await validateManager(id, input.managerId);
+  if (id === actor.id && (input.loginEnabled === false || (input.role && input.role !== "HR_ADMIN"))) {
+    throw domainError("DOMAIN_RULE", "You cannot disable or demote your own account.");
+  }
   const hasReports = existing._count.directReports > 0;
   if (hasReports && input.role === "EMPLOYEE") {
     throw domainError("DOMAIN_RULE", "Reassign this person's direct reports before changing their role to Employee.", { role: ["Has direct reports."] });
@@ -104,18 +107,50 @@ export async function updateEmployee(actor: Actor, id: string, input: UpdateEmpl
   if (hasReports && input.loginEnabled === false) {
     throw domainError("DOMAIN_RULE", "Reassign this person's direct reports before disabling their account.", { loginEnabled: ["Has direct reports."] });
   }
-  if (id === actor.id && (input.loginEnabled === false || (input.role && input.role !== "HR_ADMIN"))) {
-    throw domainError("DOMAIN_RULE", "You cannot disable or demote your own account.");
+  const { handOverToId, ...changes } = input;
+  // Disabling someone who still has open work: it must be handed to a colleague first,
+  // otherwise requests and onboarding tasks would sit with a person who cannot sign in.
+  let handOver: { requests: { id: string; status: "ASSIGNED" | "IN_PROGRESS"; requesterId: string }[]; taskIds: string[]; to: string } | null = null;
+  if (input.loginEnabled === false && existing.loginEnabled) {
+    const [requests, tasks] = await Promise.all([
+      db.serviceRequest.findMany({ where: { assigneeId: id, status: { in: ["ASSIGNED", "IN_PROGRESS"] } }, select: { id: true, status: true, requesterId: true } }),
+      db.onboardingTask.findMany({ where: { ownerId: id, status: { not: "COMPLETED" } }, select: { id: true } }),
+    ]);
+    if (requests.length || tasks.length) {
+      const what = [requests.length ? `${requests.length} open request${requests.length === 1 ? "" : "s"}` : "", tasks.length ? `${tasks.length} onboarding task${tasks.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ");
+      if (!handOverToId) {
+        throw domainError("OPEN_WORK", `${existing.name} still has ${what}. Choose a colleague in the same team to take them over, then save again.`, { handOverToId: [`Choose who takes over ${what}.`] });
+      }
+      const to = await db.user.findUnique({ where: { id: handOverToId }, select: { id: true, loginEnabled: true, departmentId: true } });
+      if (!to || to.id === id || !to.loginEnabled || to.departmentId !== existing.departmentId) {
+        throw domainError("OPEN_WORK", "Hand the work to an active colleague in the same team.", { handOverToId: ["Not an eligible colleague."] });
+      }
+      if (requests.some((r) => r.requesterId === to.id)) {
+        throw domainError("OPEN_WORK", "That colleague raised one of these requests, so they can't handle it. Choose someone else.", { handOverToId: ["Raised one of the requests."] });
+      }
+      handOver = { requests: requests as { id: string; status: "ASSIGNED" | "IN_PROGRESS"; requesterId: string }[], taskIds: tasks.map((t) => t.id), to: to.id };
+    }
   }
   const invalidateSessions = (input.loginEnabled === false && existing.loginEnabled) || (input.role !== undefined && input.role !== existing.role);
-  const u = await db.user.update({
-    where: { id },
-    data: {
-      ...input,
-      ...(input.joiningDate ? { joiningDate: parseDateOnly(input.joiningDate) } : {}),
-      ...(invalidateSessions ? { sessionVersion: { increment: 1 } } : {}),
-    },
-    select: employeeSelect,
+  const u = await db.$transaction(async (tx) => {
+    if (handOver) {
+      for (const r of handOver.requests) {
+        await tx.serviceRequest.update({ where: { id: r.id }, data: { assigneeId: handOver.to, version: { increment: 1 } } });
+        await tx.requestEvent.create({
+          data: { requestId: r.id, actorId: actor.id, kind: "REASSIGNED", fromStatus: r.status, toStatus: r.status, previousAssigneeId: id, newAssigneeId: handOver.to },
+        });
+      }
+      if (handOver.taskIds.length) await tx.onboardingTask.updateMany({ where: { id: { in: handOver.taskIds } }, data: { ownerId: handOver.to, version: { increment: 1 } } });
+    }
+    return tx.user.update({
+      where: { id },
+      data: {
+        ...changes,
+        ...(changes.joiningDate ? { joiningDate: parseDateOnly(changes.joiningDate) } : {}),
+        ...(invalidateSessions ? { sessionVersion: { increment: 1 } } : {}),
+      },
+      select: employeeSelect,
+    });
   });
   return toEmployeeDTO(u);
 }

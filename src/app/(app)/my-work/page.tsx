@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/server/auth/current-user";
+import { requirePageUser as requireUser } from "@/server/auth/page-user";
 import { myWorkTasks } from "@/server/onboarding/service";
 import { listRequests } from "@/server/requests/service";
 import { myDashboard } from "@/server/dashboard/service";

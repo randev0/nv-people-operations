@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { requireUser } from "@/server/auth/current-user";
+import { requirePageUser as requireUser } from "@/server/auth/page-user";
 import { getOnboarding } from "@/server/onboarding/service";
 import { routeIdOrNotFound } from "@/server/route-params-page";
 import { load } from "@/server/page";

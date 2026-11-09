@@ -1,4 +1,4 @@
-import { requireUser } from "@/server/auth/current-user";
+import { requirePageUser as requireUser } from "@/server/auth/page-user";
 import { getTemplate } from "@/server/onboarding/templates";
 import { listDepartments } from "@/server/people/service";
 import { routeIdOrNotFound } from "@/server/route-params-page";

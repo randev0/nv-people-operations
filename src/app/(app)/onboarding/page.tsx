@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireUser } from "@/server/auth/current-user";
+import { requirePageUser as requireUser } from "@/server/auth/page-user";
 import { isHrAdmin } from "@/server/auth/permissions";
 import { getOwnOnboardingId, listOnboardings } from "@/server/onboarding/service";
 import { listOnboardingQuery } from "@/server/onboarding/schemas";

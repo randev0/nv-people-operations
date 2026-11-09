@@ -42,6 +42,8 @@ export function AssignSheet({ requestId, title, open, onOpenChange, onAssigned }
   const [error, setError] = useState<string | null>(null);
   /** Bumped after a refused (stale) submission so the sheet shows the request as it is now. */
   const [reload, setReload] = useState(0);
+  /** Bumped after the category was moved: reload quietly, no warning. */
+  const [refetch, setRefetch] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -56,7 +58,7 @@ export function AssignSheet({ requestId, title, open, onOpenChange, onAssigned }
     return () => {
       live = false;
     };
-  }, [open, requestId, reload]);
+  }, [open, requestId, reload, refetch]);
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -115,6 +117,7 @@ export function AssignSheet({ requestId, title, open, onOpenChange, onAssigned }
                   suggestion={suggestion}
                   onAssigned={(name) => onAssigned(`“${req.title}” assigned to ${name}. Your list has been updated.`)}
                   onConflict={() => setReload((n) => n + 1)}
+                  onCategoryChanged={() => setRefetch((n) => n + 1)}
                 />
               </>
             )}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlarmClock, ArrowRight, BarChart3, CheckCheck, ClipboardList, FilePlus2, Hourglass, Inbox, ListChecks, Timer, UserPlus, Users, type LucideIcon } from "lucide-react";
-import { requireUser } from "@/server/auth/current-user";
+import { requirePageUser as requireUser } from "@/server/auth/page-user";
 import { isHrAdmin, isManager } from "@/server/auth/permissions";
 import { myDashboard, orgDashboard, overdueTasksInScope, overdueToChase, todayInsight } from "@/server/dashboard/service";
 import { TIER_LABEL, workQueue, type WorkItem } from "@/server/dashboard/work-queue";

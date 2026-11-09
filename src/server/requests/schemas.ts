@@ -17,6 +17,8 @@ export const createRequestSchema = z
 
 export const commentSchema = z.object({ body: text(1, 3000) }).strict();
 
+export const changeCategorySchema = z.object({ categoryId: z.uuid(), expectedVersion: z.number().int().min(1) }).strict();
+
 export const assignSchema = z.object({ assigneeId: z.uuid(), expectedVersion: z.number().int().min(1) }).strict();
 
 export const transitionSchema = z

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { requireUser } from "@/server/auth/current-user";
+import { requirePageUser as requireUser } from "@/server/auth/page-user";
 import { getRequest, listComments, listEvents } from "@/server/requests/service";
 import { getRequestSuggestion } from "@/server/ai/request-suggestion";
 import { routeIdOrNotFound } from "@/server/route-params-page";
@@ -91,9 +91,13 @@ export default async function RequestDetailPage({ params, searchParams }: { para
         <section aria-labelledby="activity-h">
           <h2 id="activity-h" className="mb-3 text-[15px] font-semibold tracking-[-0.02em]">Activity</h2>
           <ActivityTimeline comments={comments.data} events={events.data} />
-          <Panel className="mt-4 p-4">
-            <CommentForm requestId={req.id} />
-          </Panel>
+          {req.status === "CLOSED" ? (
+            <p className="mt-4 rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground">This request is closed, so it no longer takes comments. Raise a new request if the problem comes back.</p>
+          ) : (
+            <Panel className="mt-4 p-4">
+              <CommentForm requestId={req.id} />
+            </Panel>
+          )}
         </section>
       </div>
     </div>

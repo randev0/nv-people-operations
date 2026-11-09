@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/server/auth/current-user";
+import { requirePageUser as requireUser } from "@/server/auth/page-user";
 import { isHrAdmin, isManager } from "@/server/auth/permissions";
 import { listCategories, listRequests } from "@/server/requests/service";
 import { listRequestsQuery } from "@/server/requests/schemas";
@@ -120,10 +120,10 @@ export default async function RequestsPage({ searchParams }: { searchParams: SP 
         <Forbidden message={result.message} />
       ) : result.data.data.length === 0 ? (
         <EmptyState
-          title={activeFilters ? "No requests match these filters." : "Nothing here yet."}
-          action={activeFilters ? <Button asChild variant="outline"><Link href={`/requests?scope=${params.scope}`}>Clear filters</Link></Button> : <Button asChild><Link href="/requests/new">New request</Link></Button>}
+          title={result.data.meta.page > 1 && result.data.meta.total > 0 ? `No requests on page ${result.data.meta.page}.` : activeFilters ? "No requests match these filters." : "Nothing here yet."}
+          action={result.data.meta.page > 1 && result.data.meta.total > 0 ? <Button asChild variant="outline"><Link href={`/requests?${qs({ page: undefined })}`}>Go to page 1</Link></Button> : activeFilters ? <Button asChild variant="outline"><Link href={`/requests?scope=${params.scope}`}>Clear filters</Link></Button> : <Button asChild><Link href="/requests/new">New request</Link></Button>}
         >
-          {activeFilters ? "Try a different status or category." : "Requests you can see will appear in this queue."}
+          {result.data.meta.page > 1 && result.data.meta.total > 0 ? `There ${result.data.meta.total === 1 ? "is 1 request" : `are ${result.data.meta.total} requests`} in total; this page is past the end.` : activeFilters ? "Try a different status or category." : "Requests you can see will appear in this queue."}
         </EmptyState>
       ) : (
         <>

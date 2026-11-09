@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { api, errorText } from "@/lib/api";
+import { api, ApiError, errorText } from "@/lib/api";
 
 const pill = "h-12 rounded-full border-white/15 bg-white/[0.03] px-5 text-[15px]";
 
-export function LoginForm() {
+export function LoginForm({ next = "/dashboard" }: { next?: string }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -20,14 +20,21 @@ export function LoginForm() {
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
+    const email = String(form.get("email") ?? "").trim();
+    const password = String(form.get("password") ?? "");
+    if (!email || !password) {
+      setError(!email && !password ? "Enter your email and password." : !email ? "Enter your email." : "Enter your password.");
+      return;
+    }
     setPending(true);
     setError(null);
     try {
       await api("/auth/login", { method: "POST", body: { email: form.get("email"), password: form.get("password") } });
-      router.replace("/dashboard");
+      router.replace(next);
       router.refresh();
     } catch (err) {
-      setError(errorText(err));
+      // Malformed input (for example an extremely long value) reads the same as a wrong password.
+      setError(err instanceof ApiError && err.code === "VALIDATION_FAILED" ? "Email or password is incorrect." : errorText(err));
       setPending(false);
     }
   }

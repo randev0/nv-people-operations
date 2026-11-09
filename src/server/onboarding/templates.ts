@@ -107,9 +107,16 @@ export async function getTemplate(actor: Actor, id: string): Promise<TemplateDTO
   return toTemplateDTO(t);
 }
 
+/** Template names are what HR picks from when assigning, so they must be unique (case-insensitive). */
+async function assertUniqueName(name: string, exceptId?: string) {
+  const clash = await db.onboardingTemplate.findFirst({ where: { name: { equals: name.trim(), mode: "insensitive" }, ...(exceptId ? { id: { not: exceptId } } : {}) }, select: { id: true } });
+  if (clash) throw domainError("DUPLICATE", "A template with this name already exists. Choose a different name.", { name: ["Name already in use."] });
+}
+
 export async function createTemplate(actor: Actor, input: TemplateInput): Promise<TemplateDTO> {
   requireHr(actor);
   await validateTemplate(input);
+  await assertUniqueName(input.name);
   const t = await db.$transaction(async (tx) => {
     const tpl = await tx.onboardingTemplate.create({
       data: { name: input.name, description: input.description, createdById: actor.id },
@@ -128,6 +135,7 @@ export async function updateTemplate(actor: Actor, id: string, input: TemplateUp
   if (!existing) throw notFound("Template");
   if (existing.version !== input.expectedVersion) throw staleVersion();
   await validateTemplate(input);
+  await assertUniqueName(input.name, id);
   const t = await db.$transaction(async (tx) => {
     const res = await tx.onboardingTemplate.updateMany({
       where: { id, version: input.expectedVersion },

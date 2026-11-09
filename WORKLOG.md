@@ -189,3 +189,11 @@
 
 ## 2026-11-10 — Exploratory 'try to break it' run
 - Ran a scripted human-style exploratory pass on a fresh local copy (people_ops_break) plus read-only live checks. Results and the fix list are in docs/QA_FINDINGS.md (4 high, 10 medium, 9 low; error-handling inventory and gaps E1–E6).
+
+## 2026-11-10 — Fixing the exploratory findings
+- All 23 items in docs/QA_FINDINGS.md addressed (status table at the end of that file); L7 (HTTP 200 on in-app not-found pages) kept and explained.
+- Decision on assignment (L9): only the category's own team can take a request. Because a misfiled request would otherwise be stuck, assigners can move it to another category before work starts (from the AI suggestion: "Move to IT equipment"), recorded as an activity comment; no schema change was needed.
+- Disabling someone with open work now needs a hand-over colleague in the same team (no task-owner reassignment existed, so the hand-over moves both requests and tasks in one transaction).
+- CSP: first attempt blocked scripts on the 404 page (prerendered without a nonce, seen as console CSP violations in the re-test); fixed by making the root layout render per request.
+- Re-ran the exploratory scripts against the new build: branded 404s, JSON API 404, branded outage pages with references, plain validation messages, OPEN_WORK on disabling it.owner, human transition messages, no CSP violations on any page.
+- Tests: unit 36/36, integration 33/33 (new qa-fixes.test.ts: team-only assignment, AI keep-previous, hand-over, closed comments and transition wording, duplicate template / joining-date range / plain messages, JSON 404 and lock-out wording), e2e 22/22 (new error-handling flow).

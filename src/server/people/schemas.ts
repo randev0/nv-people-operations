@@ -2,7 +2,13 @@ import { z } from "zod";
 import { paginationSchema } from "../http";
 import { isValidDateOnly } from "../onboarding/dates";
 
-const dateOnly = z.string().refine(isValidDateOnly, "Use YYYY-MM-DD.");
+const dateOnly = z.string().refine(isValidDateOnly, "Enter a real date (YYYY-MM-DD).");
+/** Joining dates: no earlier than 1970 and at most one year ahead (catches typos such as 2099). */
+const joiningDate = dateOnly.refine((d) => {
+  if (!isValidDateOnly(d)) return true; // already reported above
+  const t = Date.parse(`${d}T00:00:00Z`);
+  return t >= Date.parse("1970-01-01T00:00:00Z") && t <= Date.now() + 366 * 86_400_000;
+}, "Joining date must be between 1970 and one year from today.");
 const ROLES = ["EMPLOYEE", "MANAGER", "HR_ADMIN"] as const;
 const COUNTRIES = ["BD", "MY", "LK", "CY"] as const;
 const STATUSES = ["ACTIVE", "ON_PROBATION", "ON_NOTICE"] as const;
@@ -26,7 +32,7 @@ export const createEmployeeSchema = z
     countryCode: z.enum(COUNTRIES),
     departmentId: z.uuid(),
     managerId: z.uuid().nullable(),
-    joiningDate: dateOnly,
+    joiningDate,
     employmentStatus: z.enum(STATUSES),
   })
   .strict();
@@ -38,9 +44,11 @@ export const updateEmployeeSchema = z
     countryCode: z.enum(COUNTRIES),
     departmentId: z.uuid(),
     managerId: z.uuid().nullable(),
-    joiningDate: dateOnly,
+    joiningDate,
     employmentStatus: z.enum(STATUSES),
     loginEnabled: z.boolean(),
+    /** When disabling someone with open work: the colleague who takes it over. */
+    handOverToId: z.uuid(),
   })
   .partial()
   .strict();

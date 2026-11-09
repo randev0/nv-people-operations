@@ -98,3 +98,18 @@ Endpoints added beyond the pack (`/employees/manager-options`, `/onboarding/unas
 ```
 
 Values shown are shape only. Open = SUBMITTED/ASSIGNED/IN_PROGRESS. Headcount counts all employees. Insight = joined within 60 days before `asOf` (in UTC date terms), has an onboarding, has ≥1 open IT_EQUIPMENT request.
+
+### Added 2026-11-10
+
+| Method / path | Body | Result | Notes |
+| --- | --- | --- | --- |
+| POST /requests/:id/category | `{categoryId, expectedVersion}` | RequestDTO | Assigners only, SUBMITTED or ASSIGNED; an assignee outside the new category's team must be replaced first (422). Adds an activity comment. 409 on stale version. |
+| POST /requests/:id/comments | — | — | Now 422 `REQUEST_CLOSED` on closed requests. |
+| POST /requests/:id/assign | — | — | Assignee must be in the category's team (422 otherwise). |
+| POST /requests/:id/ai-suggestion | — | — | 503 `AI_UNAVAILABLE` when a refresh is rate limited or fails while a good suggestion exists; the stored suggestion is kept. |
+| PATCH /employees/:id | `handOverToId?` | EmployeeDTO | Required when disabling someone with open requests or onboarding tasks (422 `OPEN_WORK` without it). |
+| POST /onboarding-templates, PUT /onboarding-templates/:id | — | — | 422 `DUPLICATE` when the name is already used (case-insensitive). |
+| POST /client-errors | `{kind, message, digest?, path}` | 204 | Browser error report, logged as `client.error`; same-origin only; capped per minute. |
+| any unknown /api path | — | 404 `NOT_FOUND` JSON | |
+
+Validation errors (400 `VALIDATION_FAILED`) now carry plain-language field messages and the top-level message "Some fields need attention."

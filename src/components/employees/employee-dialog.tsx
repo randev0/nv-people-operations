@@ -23,6 +23,8 @@ export function EmployeeDialog({ departments, managers, employee }: { department
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [pending, setPending] = useState(false);
   const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
+  /** Colleagues who can take over open work when this person's login is disabled. */
+  const [successors, setSuccessors] = useState<Opt[] | null>(null);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -36,7 +38,8 @@ export function EmployeeDialog({ departments, managers, employee }: { department
     setFieldErrors({});
     try {
       if (employee) {
-        await api(`/employees/${employee.id}`, { method: "PATCH", body: { ...common, loginEnabled: f.get("loginEnabled") === "on" } });
+        const handOverToId = f.get("handOverToId");
+        await api(`/employees/${employee.id}`, { method: "PATCH", body: { ...common, loginEnabled: f.get("loginEnabled") === "on", ...(handOverToId ? { handOverToId } : {}) } });
         setOpen(false);
       } else {
         const c = await api<{ id: string; name: string }>("/employees", { method: "POST", body: { ...common, email: f.get("email"), initialPassword: f.get("initialPassword") } });
@@ -46,6 +49,11 @@ export function EmployeeDialog({ departments, managers, employee }: { department
     } catch (err) {
       if (err instanceof ApiError && err.fieldErrors) setFieldErrors(err.fieldErrors);
       setError(errorText(err));
+      if (employee && err instanceof ApiError && err.code === "OPEN_WORK" && !successors) {
+        api<{ id: string; name: string; loginEnabled: boolean }[]>(`/employees?departmentId=${employee.department.id}&pageSize=100`)
+          .then((list) => setSuccessors(list.filter((u) => u.id !== employee.id && u.loginEnabled).map((u) => ({ id: u.id, name: u.name }))))
+          .catch(() => setSuccessors([]));
+      }
     } finally {
       setPending(false);
     }
@@ -55,7 +63,7 @@ export function EmployeeDialog({ departments, managers, employee }: { department
   const sel = "h-9 w-full rounded-md border bg-card px-2 text-sm";
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setCreated(null); setError(null); setFieldErrors({}); } }}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setCreated(null); setError(null); setFieldErrors({}); setSuccessors(null); } }}>
       <DialogTrigger asChild>
         {employee ? <Button variant="ghost" size="sm" aria-label={`Edit ${employee.name}`}>Edit</Button> : <Button>New employee</Button>}
       </DialogTrigger>
@@ -96,6 +104,16 @@ export function EmployeeDialog({ departments, managers, employee }: { department
               </label>
             ) : null}
             {fe("loginEnabled")}
+            {successors ? (
+              <div className="space-y-1 sm:col-span-2">
+                <Label htmlFor="e-handover">Hand open work over to</Label>
+                <select id="e-handover" name="handOverToId" className={sel} defaultValue="">
+                  <option value="">{successors.length ? "Choose a colleague in the same team" : "No active colleague in this team"}</option>
+                  {successors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                {fe("handOverToId")}
+              </div>
+            ) : null}
             <div className="sm:col-span-2"><Button type="submit" disabled={pending}>{pending ? "Saving…" : employee ? "Save changes" : "Create employee"}</Button></div>
           </form>
         )}

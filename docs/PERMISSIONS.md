@@ -29,6 +29,8 @@ All checks live in `src/server/auth/permissions.ts` and are applied by domain se
 - **List scopes:** `mine` (requester = me), `assigned` (assignee = me), `team` (requester is my direct report; Manager/HR), `all` (HR). A role requesting a scope it does not hold → 403.
 - **Onboarding** read scope: HR → all; others → `employeeId = me`, plus managers `employee.managerId = me`.
 - **Task-owner exception:** owners see their tasks in My Work with title, description, due date, status, prerequisite titles/statuses and hire name/department only. They cannot open the hire's full checklist (`GET /onboarding/:id` → 404) unless they independently hold read scope. Task events are readable by the owner or anyone with checklist scope.
+- **Who can be assigned:** only active people in the department that handles the request's category (`RequestCategory.defaultDepartmentId`), never the requester. Assigners may move a request to another category before work starts (`POST /requests/:id/category`), which is recorded as a comment; an existing assignee outside the new team must be replaced first.
+- **Disabling a login with open work** requires `handOverToId`, an active colleague in the same department; their open requests are reassigned and their onboarding tasks change owner in the same transaction.
 - **Lookups:** assignee options and onboarding owner options return UserSummary only (id, name, role, country, department).
 - **Employees:** `GET /employees/:id` allowed for self, direct manager, HR; otherwise 404.
 - **Precedence:** authentication (401) → read scope (404) → action permission (403) → state/domain rules (422) → version (409).

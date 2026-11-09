@@ -93,3 +93,31 @@ Severity:
   - The assign panel's stale handling works.
   - Pages recover by themselves after a database outage.
 - **Crawl:** no server errors, no browser page errors and no error-boundary hits on any page for any role. Every page has a heading. No horizontal overflow at 390 px (wide tables scroll inside their own container).
+
+## Fix status (2026-11-10, same day)
+
+| # | Status | What changed |
+| --- | --- | --- |
+| H1 | Fixed | Bulk assign re-reads each request and skips any that is no longer unassigned ("Skipped, someone else got there first: … already assigned to X"); it never reassigns. |
+| H2 | Fixed | A rate-limited or failed Refresh keeps the stored READY suggestion and answers 503 "previous suggestion is kept; try again in a minute". |
+| H3 / E1 | Fixed | `src/app/error.tsx` (sign-in page and signed-in layout failures) and `src/app/global-error.tsx` (root layout) show a branded "We can't load this right now" with a reference and Try again. Failures are reported to the server log. |
+| H4 / E2 | Fixed | Root `not-found.tsx` (branded, links to dashboard and sign-in); `/api/*` unknown paths answer JSON 404. |
+| M1 / E3 | Fixed | Validation messages are written in plain words in one place (`friendlyIssue` in `src/server/http.ts`): "Needs at least 3 characters.", "This field is required.", "Add at least one.", "Enter a valid email address."; banner "Some fields need attention.". Login checks empty fields itself and treats malformed input as a wrong password. |
+| M2 | Fixed | Disabling someone with open requests or onboarding tasks asks for a colleague in the same team ("Hand open work over to"); requests are reassigned (REASSIGNED events) and tasks change owner in one transaction. |
+| M3 | Fixed | Signed-out page visits go to `/login?next=…` and return there after sign-in (same-site paths only). When the session ends mid-task, a banner offers "Sign in again" in a new tab, so typed text is kept. |
+| M4 | Fixed | Closed requests refuse comments (422 REQUEST_CLOSED) and the page shows a note instead of the comment box. |
+| M5 | Fixed | Removing a task that others depend on asks for confirmation and then lists which tasks lost the prerequisite. Saving shows "Saved "…" (version N)". |
+| M6 | Fixed | Template names are unique (case-insensitive), 422 DUPLICATE. |
+| M7 | Fixed | Joining date must be between 1970 and one year ahead. |
+| M8 | Fixed | Out-of-order actions read "This request is already in progress, so it can't be started now. The page has the latest state." and the page refreshes. |
+| M9 | Fixed | Nonce-based Content-Security-Policy on every page (`src/proxy.ts`; the root layout renders per request so even 404s carry the nonce); HSTS on HTTPS; nginx `server_tokens off` and HSTS at the proxy. |
+| M10 | Fixed | Lock-out message: "Too many sign-in attempts. Try again in N minutes, or ask your HR admin." |
+| L1 | Fixed | Request-page outcomes have `role="status"`; template save confirmation added. |
+| L2 | Fixed | Escape closes the phone menu and returns focus to the menu button. |
+| L3 | Fixed | Past-the-end pages say "No requests on page N" with "Go to page 1". |
+| L4 | Fixed | Character counters appear near the limit on title, description and comments. |
+| L5 / E4 | Fixed | Server errors show "Reference: …" (first 8 characters of the request id); error pages show the digest. |
+| L6 / E5 | Fixed | Pages use `requirePageUser`, which redirects instead of throwing, so signed-out views no longer log errors. |
+| L7 | Kept | In-app "Not found" pages still return HTTP 200: the signed-in area streams its loading skeleton (`loading.tsx`), which sends the status line before the page knows the record is missing. Removing the skeleton would fix the code but slow every page; the content and `noindex` are correct. |
+| L8 / E6 | Fixed (basic) | Browser errors (error boundaries, uncaught errors, unhandled rejections) are posted to `/api/client-errors` and logged as `client.error` JSON lines next to server errors. No third-party tracker. |
+| L9 | Decided and fixed | Only the category's own team can be assigned (IT for IT equipment and software, People & Culture for HR and Other, Facilities for facilities). The picker lists only that team; the server refuses anyone else. A request filed under the wrong category can be moved by an assigner before work starts ("Move to IT equipment" from the AI suggestion), recorded as a comment in the activity. |

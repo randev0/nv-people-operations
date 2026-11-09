@@ -9,8 +9,9 @@ type Option = { id: string; name: string; countryCode: string; department: { id:
 /**
  * Assign several selected requests to one person. Only people eligible for every
  * selected request are offered (the server's assignee options exclude each requester).
- * Each request is assigned through the normal endpoint with its own fresh version, so
- * one stale or forbidden request does not block the others; the outcome is reported.
+ * Each request is assigned through the normal endpoint, one at a time, so one refused
+ * request does not block the others; the outcome is reported per request. A request
+ * that someone else assigned after it was selected is skipped (never reassigned).
  */
 export function BulkAssignBar({ selected, titles, onDone, onClear }: {
   selected: string[];
@@ -51,10 +52,15 @@ export function BulkAssignBar({ selected, titles, onDone, onClear }: {
     setPending(true);
     setError(null);
     const failed: string[] = [];
+    const skipped: string[] = [];
     let ok = 0;
     for (const id of selected) {
       try {
-        const r = await api<{ version: number }>(`/requests/${id}`);
+        const r = await api<{ version: number; status: string; assignee: { name: string } | null }>(`/requests/${id}`);
+        if (r.status !== "SUBMITTED") {
+          skipped.push(`“${titles[id]}” (${r.assignee ? `already assigned to ${r.assignee.name}` : "no longer waiting"})`);
+          continue;
+        }
         await api(`/requests/${id}/assign`, { method: "POST", body: { assigneeId: person.id, expectedVersion: r.version } });
         ok++;
       } catch (e) {
@@ -63,7 +69,8 @@ export function BulkAssignBar({ selected, titles, onDone, onClear }: {
     }
     setPending(false);
     const head = `Assigned ${ok} of ${selected.length} request${selected.length === 1 ? "" : "s"} to ${person.name}.`;
-    onDone(failed.length ? `${head} Not assigned: ${failed.join("; ")}` : `${head} Your list has been updated.`);
+    const parts = [head, skipped.length ? `Skipped, someone else got there first: ${skipped.join("; ")}.` : "", failed.length ? `Not assigned: ${failed.join("; ")}` : ""].filter(Boolean);
+    onDone(skipped.length || failed.length ? parts.join(" ") : `${head} Your list has been updated.`);
   }
 
   return (
@@ -78,7 +85,7 @@ export function BulkAssignBar({ selected, titles, onDone, onClear }: {
           className="h-9 w-full rounded-md border border-input bg-card px-2"
           aria-label="Assign selected requests to"
         >
-          <option value="">{options ? (options.length ? "Choose a person eligible for all selected" : "Nobody is eligible for all selected") : "Loading people…"}</option>
+          <option value="">{options ? (options.length ? "Choose a person eligible for all selected" : "Nobody can take all of these: pick requests from one category's team") : "Loading people…"}</option>
           {byTeam.map(([team, people]) => (
             <optgroup key={team} label={team}>
               {people.map((o) => <option key={o.id} value={o.id}>{o.name} ({o.countryCode})</option>)}

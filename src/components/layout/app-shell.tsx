@@ -4,7 +4,9 @@
 // mobile toggle pattern; typed user prop, role-based navigation, no AutoLogout/Header
 // dependencies and no persisted collapse state. Restyled for the NEXT brand (ink sidebar,
 // crimson active rail, holographic orb mark).
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { SessionExpiredBanner } from "./session-expired-banner";
+import { reportClientError } from "@/lib/report-error";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, LayoutDashboard, Inbox, ListChecks, UserPlus, FileStack, Users, LogOut } from "lucide-react";
@@ -35,6 +37,30 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  // Uncaught browser errors go to the server log too.
+  useEffect(() => {
+    const onError = (e: ErrorEvent) => reportClientError("window", e.message);
+    const onRejection = (e: PromiseRejectionEvent) => reportClientError("promise", e.reason instanceof Error ? e.reason.message : String(e.reason));
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
+  }, []);
+  // Mobile drawer: Escape closes it and returns focus to the menu button.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        menuButton.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
 
   async function signOut() {
     try {
@@ -111,8 +137,9 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
       </aside>
       {open ? <div className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setOpen(false)} aria-hidden /> : null}
       <div className="flex min-h-screen w-full flex-col md:pl-60">
+        <SessionExpiredBanner />
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b bg-background/80 px-4 py-2 backdrop-blur md:hidden">
-          <Button variant="ghost" size="icon" onClick={() => setOpen((v) => !v)} aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open}>
+          <Button ref={menuButton} variant="ghost" size="icon" onClick={() => setOpen((v) => !v)} aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open}>
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
           <BrandOrb small /><span className="font-semibold tracking-[-0.03em]">People Ops</span>

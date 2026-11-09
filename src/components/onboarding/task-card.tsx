@@ -57,7 +57,7 @@ export function TaskCard({ task, timezone, showHire = false }: { task: TaskView;
       router.refresh();
     } catch (err) {
       setError(errorText(err));
-      if (err instanceof ApiError && err.code === "STALE_VERSION") router.refresh();
+      if (err instanceof ApiError && (err.code === "STALE_VERSION" || err.code === "INVALID_TRANSITION")) router.refresh();
     } finally {
       setPending(null);
     }

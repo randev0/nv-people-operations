@@ -1,4 +1,4 @@
-import { requireUser } from "@/server/auth/current-user";
+import { requirePageUser as requireUser } from "@/server/auth/page-user";
 import { listTemplates } from "@/server/onboarding/templates";
 import { unassignedEmployees } from "@/server/onboarding/service";
 import { load, sp } from "@/server/page";
