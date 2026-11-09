@@ -76,7 +76,7 @@ The seed is idempotent. It only creates missing fixture rows (deterministic IDs 
 | `npm run test:e2e` | Same harness with Playwright: full request lifecycle, task unblocking, template editor, role navigation, 390 px layout |
 | `npm run db:generate` / `db:migrate` / `db:seed` / `db:verify-seed` | Prisma client, `migrate deploy`, seed, seed assertions |
 
-Latest local results (2026-11-09): lint 0 problems, typecheck 0 errors, unit 24/24, integration 23/23, e2e 5/5, seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
+Latest local results (2026-11-09): lint 0 problems, typecheck 0 errors, unit 24/24, integration 24/24, e2e 5/5, seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 
 ## Deployment
 
@@ -91,7 +91,7 @@ The target shape is one Node.js host running `npm run build && npm start`, plus 
 
 ## Reuse disclosure
 
-Selected UI primitives, the styling tokens and three layout patterns were adapted from the candidate's ERACare platform repository (read-only, commit `1db0431`). Nothing else was reused: no API routes, schema, migrations, deployment scripts or data. Each file is listed in [docs/REUSE_MANIFEST.md](docs/REUSE_MANIFEST.md), and shadcn/ui's MIT notice is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Selected UI primitives, the styling tokens and three layout patterns were adapted from the ERACare platform repository `randev0/eracare-platform` (read-only, commit `1db0431`). Nothing else was reused: no API routes, schema, migrations, deployment scripts or data. Each file is listed in [docs/REUSE_MANIFEST.md](docs/REUSE_MANIFEST.md), and shadcn/ui's MIT notice is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Known limitations
 

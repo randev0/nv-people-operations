@@ -201,6 +201,10 @@ export async function assignOnboarding(
       // Re-check the template version inside the transaction.
       const fresh = await tx.onboardingTemplate.findUnique({ where: { id: tpl.id }, select: { version: true, isActive: true } });
       if (!fresh || fresh.version !== input.expectedTemplateVersion || !fresh.isActive) throw staleVersion();
+      // Owners must still be login-enabled; share-lock their rows against a concurrent disable.
+      const ownerIds = [...new Set(ownerByKey.values())];
+      const enabled = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "User" WHERE id = ANY(${ownerIds}::uuid[]) AND "loginEnabled" FOR SHARE`;
+      if (enabled.length !== ownerIds.length) throw domainError("DOMAIN_RULE", "An owner's account was disabled; review owners and try again.");
       const onboarding = await tx.onboarding.create({
         data: {
           employeeId: hire.id, templateId: tpl.id, templateVersion: tpl.version, templateName: tpl.name,

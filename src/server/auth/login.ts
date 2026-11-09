@@ -18,8 +18,11 @@ export const loginSchema = z
 const invalid = () => new AppError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
 
 export async function login(input: z.infer<typeof loginSchema>, ip: string): Promise<EmployeeDTO> {
-  const attempts = await hitLoginThrottle(input.email, ip, env.loginWindowMinutes());
-  if (attempts > env.loginLimit()) throw rateLimited();
+  // Two counters: per email+IP, and per email regardless of IP (3× limit) so rotating
+  // source addresses or spoofed forwarding headers cannot remove the cap.
+  const perIp = await hitLoginThrottle(input.email, ip, env.loginWindowMinutes());
+  const perAccount = await hitLoginThrottle(input.email, "*", env.loginWindowMinutes());
+  if (perIp > env.loginLimit() || perAccount > env.loginLimit() * 3) throw rateLimited();
 
   const user = await db.user.findUnique({
     where: { email: input.email },

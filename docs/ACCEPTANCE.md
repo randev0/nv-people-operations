@@ -39,7 +39,7 @@ States: NOT RUN / PASS / FAIL / BLOCKED. A row is PASS only with a recorded comm
 | P01 | Fresh browser opens deployed URL and logs in | No local-only URL, missing assets or authentication redirect loop | BLOCKED | 2026-11-09 | 21871a0 | No hosting target yet |
 | P02 | New comment/request persists after reload/restart | Real persistent database storage | BLOCKED | 2026-11-09 | 21871a0 | Local persistence verified (comment visible after reload in e2e); restart/hosted persistence not run |
 | P03 | Repository/env/build output review | No API/session/database secrets or production data committed | PASS (local) | 2026-11-09 | 21871a0 | `git ls-files` has no .env/keys; `git grep` for key/secret patterns finds none (demo password appears only in README by design). Hosted build output not reviewed |
-| P04 | Clean installation/build/lint/typecheck/test | Commands and actual results recorded; failures not hidden | PASS (local) | 2026-11-09 | 21871a0 | See command log: build, lint, typecheck, unit 24/24, integration 23/23 (×3), e2e 5/5 |
+| P04 | Clean installation/build/lint/typecheck/test | Commands and actual results recorded; failures not hidden | PASS (local) | 2026-11-09 | 21871a0 | See command log: build, lint, typecheck, unit 24/24, integration 24/24, e2e 5/5 (clean `npm ci` before final run) |
 
 ## Command log
 
@@ -50,7 +50,7 @@ States: NOT RUN / PASS / FAIL / BLOCKED. A row is PASS only with a recorded comm
 | 2026-11-09 | `npm run lint` | 0 problems |
 | 2026-11-09 | `npm run build` | compiled; 50 route entries (pages + API) |
 | 2026-11-09 | `npm run test:unit` | 24 pass, 0 fail |
-| 2026-11-09 | `npm run test:integration` | 23 pass, 0 fail (3 consecutive runs; first run 22/23, see WORKLOG test-isolation note) |
+| 2026-11-09 | `npm run test:integration` | 24 pass, 0 fail (after review fixes; earlier 23/23 ×4; first-ever run 22/23, see DEBUG_LOG Bug 3) |
 | 2026-11-09 | `npm run test:e2e` | 5 passed |
 | 2026-11-09 | `npm run db:seed` ×3 + `npm run db:verify-seed` | identical totals; 22/22 checks |
 | — | Live deployment / real AI provider smoke test | NOT RUN — blocked on hosting, database and API key |

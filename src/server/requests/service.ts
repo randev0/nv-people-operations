@@ -164,6 +164,9 @@ export async function assignRequest(
     throw domainError("DOMAIN_RULE", "Assignee is not eligible.", { assigneeId: ["Not an eligible assignee."] });
   }
   const updated = await db.$transaction(async (tx) => {
+    // Lock the assignee row so a concurrent "disable login" cannot interleave.
+    const [locked] = await tx.$queryRaw<{ loginEnabled: boolean }[]>`SELECT "loginEnabled" FROM "User" WHERE id = ${assignee.id}::uuid FOR SHARE`;
+    if (!locked?.loginEnabled) throw domainError("DOMAIN_RULE", "Assignee is not eligible.", { assigneeId: ["Not an eligible assignee."] });
     const res = await tx.serviceRequest.updateMany({
       where: { id, version: input.expectedVersion, status: r.status },
       data: { assigneeId: assignee.id, status: "ASSIGNED", version: { increment: 1 } },

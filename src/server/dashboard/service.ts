@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "../db";
 import { forbidden } from "../errors";
 import { canViewOrgDashboard, isManager, type Actor } from "../auth/permissions";
-import { addCalendarDays, formatDateOnly, isOverdue } from "../onboarding/dates";
+import { COUNTRY_TIMEZONES, addCalendarDays, daysBetween, formatDateOnly, isOverdue, todayIn } from "../onboarding/dates";
 
 const OPEN_STATUSES = ["SUBMITTED", "ASSIGNED", "IN_PROGRESS"] as const;
 
@@ -18,7 +18,8 @@ async function overdueTaskCount(where: { onboarding?: object; ownerId?: string }
 export async function orgDashboard(actor: Actor) {
   if (!canViewOrgDashboard(actor)) throw forbidden("The organisation dashboard is available to HR admins.");
   const asOf = new Date();
-  const cutoff = addCalendarDays(asOf.toISOString().slice(0, 10), -60);
+  // Coarse DB pre-filter (UTC date − 61 days); exact 0–60 day window applied per hire's timezone below.
+  const cutoff = addCalendarDays(asOf.toISOString().slice(0, 10), -61);
 
   const [headcount, byStatus, byCategoryRaw, categories, activeHires, insightRows] = await Promise.all([
     db.user.groupBy({ by: ["countryCode"], _count: { _all: true }, orderBy: { countryCode: "asc" } }),
@@ -33,7 +34,7 @@ export async function orgDashboard(actor: Actor) {
         requestsSubmitted: { some: { status: { in: [...OPEN_STATUSES] }, category: { code: "IT_EQUIPMENT" } } },
       },
       select: {
-        id: true, name: true, countryCode: true,
+        id: true, name: true, countryCode: true, joiningDate: true,
         requestsSubmitted: {
           where: { status: { in: [...OPEN_STATUSES] }, category: { code: "IT_EQUIPMENT" } },
           select: { id: true, number: true },
@@ -55,7 +56,12 @@ export async function orgDashboard(actor: Actor) {
       byCategory: categories.map((c) => ({ code: c.code, name: c.name, count: catCount.get(c.id) ?? 0 })),
     },
     onboarding: { activeHires, overdueTasks },
-    newHiresWithOpenITRequests: insightRows.map((u) => ({
+    newHiresWithOpenITRequests: insightRows
+      .filter((u) => {
+        const days = daysBetween(formatDateOnly(u.joiningDate), todayIn(COUNTRY_TIMEZONES[u.countryCode], asOf));
+        return days >= 0 && days <= 60;
+      })
+      .map((u) => ({
       employeeId: u.id,
       name: u.name,
       countryCode: u.countryCode,

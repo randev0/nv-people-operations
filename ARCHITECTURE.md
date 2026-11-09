@@ -151,7 +151,7 @@ erDiagram
 ## 4. Authentication and authorization
 
 - Logout destroys the cookie **and increments `sessionVersion`**, so a copied pre-logout cookie is rejected too (sealed cookies are otherwise stateless). Trade-off: logout ends the user's sessions on all devices.
-- Login: zod-validated `{email,password}`; email normalized; throttled (10 attempts / 15 min per email+IP, DB-backed atomic upsert); bcrypt compare (a dummy compare runs for unknown emails to equalize timing); generic `INVALID_CREDENTIALS`. Success regenerates the session.
+- Login: zod-validated `{email,password}`; email normalized; throttled with two DB-backed atomic counters — 10 attempts / 15 min per email+client IP (IP = `x-real-ip` or the last `X-Forwarded-For` hop, never the client-supplied first hop) and 30 / 15 min per email regardless of IP; bcrypt compare (a dummy compare runs for unknown emails to equalize timing); generic `INVALID_CREDENTIALS`. Success regenerates the session.
 - Session cookie: iron-session, HttpOnly, `Secure` when `APP_URL` is https, SameSite=Lax, path `/`, 7 days. Contains `{userId, sessionVersion}` only.
 - `getCurrentUser()` loads the user on every protected request and denies missing, `loginEnabled=false`, or `sessionVersion` mismatch. Disabling an account or changing its password increments `sessionVersion`.
 - Mutations require `Origin` equal to the configured `APP_URL` origin (Host header is never trusted).
@@ -224,7 +224,7 @@ Full input/output DTOs and error codes: `docs/API_CONTRACT.md`. All routes retur
 
 ## 10. Limitations (MVP)
 
-No reopening, cancellation or deletion of requests/tasks; no attachments, email, notifications, password reset or public signup; templates cannot be migrated onto existing checklists; AI routing accuracy is not evaluated beyond the scenario list in `docs/ACCEPTANCE.md`. My Work filters derived flags (blocked/overdue) in memory after loading an owner's tasks — fine for hundreds of tasks per owner, not for very large volumes. Request list search uses `ILIKE` without trigram indexes. Logout signs a user out on all devices. Overdue counts change over time by design (they are computed against "today" in each hire's timezone).
+No reopening, cancellation or deletion of requests/tasks; no attachments, email, notifications, password reset or public signup; templates cannot be migrated onto existing checklists; AI routing accuracy is not evaluated beyond the scenario list in `docs/ACCEPTANCE.md`. Two HR admins editing reporting lines at the same moment could each pass the cycle check (HR-only, low likelihood; validated per request, not under a cross-row lock). My Work filters derived flags (blocked/overdue) in memory after loading an owner's tasks — fine for hundreds of tasks per owner, not for very large volumes. Request list search uses `ILIKE` without trigram indexes. Logout signs a user out on all devices. Overdue counts change over time by design (they are computed against "today" in each hire's timezone).
 
 ## 11. Decision log
 

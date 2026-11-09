@@ -95,6 +95,17 @@ test("login throttle returns 429 after the configured attempts", async () => {
   assert.deepEqual(statuses.slice(10), [429, 429]);
 });
 
+test("rotating X-Forwarded-For does not bypass the per-account login cap", async () => {
+  const email = "spoof-probe@example.com";
+  const statuses: number[] = [];
+  for (let i = 0; i < 32; i++) {
+    const r = await new Client().req("POST", "/auth/login", { email, password: "x" }, { "x-forwarded-for": `198.51.100.${i}` });
+    statuses.push(r.status);
+  }
+  assert.deepEqual(statuses.slice(0, 30), Array(30).fill(401)); // per-account cap = 3 × per-IP limit
+  assert.deepEqual(statuses.slice(30), [429, 429]);
+});
+
 test("health endpoint exposes no configuration", async () => {
   const r = await fetch(`${BASE}/api/health`);
   assert.deepEqual(await r.json(), { status: "ok" });
