@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/current-user";
 import { LoginForm } from "./login-form";
 import { BrandOrb } from "@/components/layout/app-shell";
-import { WelcomeIllustration } from "@/components/auth/welcome-illustration";
+import { LoginVisual } from "@/components/auth/login-visual";
 
 export const metadata = { title: "Sign in · People Operations" };
 
@@ -15,15 +15,16 @@ const DEMO_ACCOUNTS = [
 ] as const;
 
 /**
- * Sign-in: an illustrated panel on the left (original flat ink drawing on a warm
- * panel) and a quiet form on the right, inside the app's dark canvas.
+ * Sign-in: a visual panel on the left in the app's own style (aurora light, dot grid,
+ * glass cards previewing the product) and a quiet form on the right.
  */
 export default async function LoginPage() {
   if (await getCurrentUser()) redirect("/dashboard");
   return (
-    <main className="grid min-h-screen gap-3 bg-background p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <section className="relative flex items-center justify-center overflow-hidden rounded-[28px] bg-sun px-6 py-8 lg:py-12" aria-hidden>
-        <WelcomeIllustration className="h-48 w-auto sm:h-64 lg:h-auto lg:w-full lg:max-w-[520px]" />
+    <main className="relative grid min-h-screen gap-3 overflow-hidden bg-background p-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+      <div className="aurora opacity-25 lg:hidden" aria-hidden />
+      <section className="hidden min-h-[calc(100vh-24px)] lg:block" aria-hidden>
+        <LoginVisual />
       </section>
 
       <div className="relative flex flex-col px-4 py-8 sm:px-8">
@@ -34,8 +35,8 @@ export default async function LoginPage() {
         <div className="flex flex-1 items-center justify-center py-10">
           <div className="w-full max-w-sm">
             <div className="mb-8 text-center">
-              <h1 className="font-display text-[44px] leading-[1.05] tracking-[-0.01em]">Welcome back!</h1>
-              <p className="mt-2 font-display text-[22px] text-muted-foreground">Sign in to your workspace</p>
+              <h1 className="text-[34px] font-semibold leading-[1.1] tracking-[-0.04em]">Welcome back</h1>
+              <p className="mt-2 text-[15px] text-muted-foreground">Sign in to your workspace with your work email.</p>
             </div>
             <LoginForm />
             <details className="mt-8 rounded-2xl border bg-card/60 p-4 text-sm">

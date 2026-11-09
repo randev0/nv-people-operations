@@ -22,7 +22,6 @@ const config: Config = {
         card: { DEFAULT: "hsl(var(--card) / <alpha-value>)", foreground: "hsl(var(--card-foreground) / <alpha-value>)" },
         brand: "hsl(var(--brand) / <alpha-value>)",
         link: "hsl(var(--link) / <alpha-value>)",
-        sun: "hsl(var(--sun) / <alpha-value>)",
         success: "hsl(var(--success) / <alpha-value>)",
         warning: "hsl(var(--warning) / <alpha-value>)",
         danger: "hsl(var(--danger) / <alpha-value>)",
@@ -30,7 +29,6 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["Poppins", "ui-sans-serif", "system-ui", "Segoe UI", "sans-serif"],
-        display: ["DM Serif Display", "Georgia", "serif"],
         mono: ["Martian Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       backgroundImage: { "gradient-radial": "radial-gradient(closest-side, var(--tw-gradient-stops))" },

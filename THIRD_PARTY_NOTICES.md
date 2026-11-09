@@ -16,5 +16,5 @@ Other dependencies are listed with their licences in `package-lock.json` / `node
 
 ## Fonts and map data (added 2026-11-09)
 
-- **Poppins** (Indian Type Foundry), **Martian Mono** (Evil Martians) and **DM Serif Display** (Colophon Foundry, sign-in heading), via `@fontsource/poppins@5.3.0`, `@fontsource/martian-mono@5.3.0` and `@fontsource/dm-serif-display@5.3.0`. Licensed under the SIL Open Font License 1.1.
+- **Poppins** (Indian Type Foundry) and **Martian Mono** (Evil Martians), via `@fontsource/poppins@5.3.0` and `@fontsource/martian-mono@5.3.0`. Licensed under the SIL Open Font License 1.1.
 - **dotted-map@3.1.0** (MIT). Used once at development time to generate the static dot coordinates in `src/components/dashboard/world-dots.ts`; not a runtime dependency.
