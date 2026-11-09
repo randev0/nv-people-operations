@@ -13,7 +13,7 @@ Design and rules: **[ARCHITECTURE.md](ARCHITECTURE.md)**. API: [docs/API_CONTRAC
 
 **https://peopleops.77-42-88-180.sslip.io** — deployed 2026-11-09 on a VPS (systemd + nginx + Let's Encrypt, isolated PostgreSQL). Source: https://github.com/randev0/nv-people-operations.
 
-The AI router is deployed but **not yet enabled on the live site** (provider: dedicated Codex login on the VPS running `gpt-6.1-sol`; see deploy/DEPLOY.md); it shows "AI suggestions are not configured" and manual submission works. See [deploy/DEPLOY.md](deploy/DEPLOY.md).
+The AI router is live, using GPT-6.1 Sol through a dedicated Codex (ChatGPT plan) login on the VPS — see deploy/DEPLOY.md. Suggestions take roughly 6–10 seconds; manual submission always works. See [deploy/DEPLOY.md](deploy/DEPLOY.md).
 
 ## Demo accounts
 
