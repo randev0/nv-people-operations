@@ -13,7 +13,7 @@ Design and rules: **[ARCHITECTURE.md](ARCHITECTURE.md)**. API: [docs/API_CONTRAC
 
 **https://peopleops.77-42-88-180.sslip.io** — deployed 2026-11-09 on a VPS (systemd + nginx + Let's Encrypt, isolated PostgreSQL). Source: https://github.com/randev0/nv-people-operations.
 
-The AI router is deployed but **not yet enabled on the live site** (no Anthropic API key configured yet); it shows "AI suggestions are not configured" and manual submission works. See [deploy/DEPLOY.md](deploy/DEPLOY.md).
+The AI router is deployed but **not yet enabled on the live site** (provider set to OpenAI `gpt-6.1-sol`; waiting for an OpenAI API key); it shows "AI suggestions are not configured" and manual submission works. See [deploy/DEPLOY.md](deploy/DEPLOY.md).
 
 ## Demo accounts
 
@@ -59,7 +59,8 @@ Environment variables (`.env.example` has placeholders only):
 | `TEST_DATABASE_URL` | Separate server/database used by the integration and e2e runners. The name must contain `test`. The runner creates and drops its own per-run database there. |
 | `SESSION_SECRET` | ≥ 32 random characters (`openssl rand -hex 32`) |
 | `APP_URL` | Exact public origin. Mutations must send a matching `Origin`. Cookies are `Secure` when this is `https://`. |
-| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Server-only. If either is empty, the AI router returns 503 and everything else still works. |
+| `AI_PROVIDER` | `anthropic` (default) or `openai` |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` / `OPENAI_API_KEY`, `OPENAI_MODEL` | Server-only credentials for the selected provider (OpenAI: a platform API key, e.g. model `gpt-6.1-sol`). If the key or model is empty, the AI router returns 503 and everything else still works. |
 | `DEMO_PASSWORD` | Password given to every seeded account |
 | `ALLOW_ASSESSMENT_SEED` | Must be `true` for the seed to run. Turn it off again after seeding. |
 | `SEED_REFERENCE_DATE` | Optional `YYYY-MM-DD` for reproducible data (defaults to today) |

@@ -36,6 +36,6 @@ systemctl restart peopleops && curl -s http://127.0.0.1:3310/api/health
 
 Seeding was run **once** on 2026-11-09 (`ALLOW_ASSESSMENT_SEED=true npx tsx prisma/seed.ts`, then `verify-seed.ts` → 22/22). The flag is not in the env file, so the app never seeds on boot.
 
-Enable the AI router: put `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` in `/etc/peopleops/peopleops.env`, then `systemctl restart peopleops`.
+Enable the AI router: the live env file has `AI_PROVIDER=openai` and `OPENAI_MODEL=gpt-6.1-sol`; set `OPENAI_API_KEY=` (an OpenAI platform API key) in `/etc/peopleops/peopleops.env`, then `systemctl restart peopleops`. (Anthropic alternative: `AI_PROVIDER=anthropic` + `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL`.)
 
 Logs: `journalctl -u peopleops -f`. Rollback: point `/opt/peopleops/current` at the previous release and restart.
