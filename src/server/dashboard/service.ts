@@ -254,7 +254,10 @@ export type MyDashboard = Awaited<ReturnType<typeof myDashboard>>;
  * onboarding is blocked.
  */
 export async function todayInsight(actor: Actor, asOf: Date = new Date()) {
-  const all = await newHiresWithOpenItRequests(asOf);
+  const [all, itCategory] = await Promise.all([
+    newHiresWithOpenItRequests(asOf),
+    db.requestCategory.findUnique({ where: { code: "IT_EQUIPMENT" }, select: { id: true } }),
+  ]);
   const scope = isHrAdmin(actor) ? "org" : isManager(actor) ? "team" : "self";
   const rows = scope === "org" ? all : scope === "team" ? all.filter((u) => u.managerId === actor.id) : all.filter((u) => u.id === actor.id);
   const requests = rows.flatMap((u) => u.requestsSubmitted);
@@ -264,6 +267,6 @@ export async function todayInsight(actor: Actor, asOf: Date = new Date()) {
     hires: rows.length,
     requests: requests.length,
     oldestDays: oldest,
-    href: scope === "org" ? "/requests?scope=all&insight=new-hires-it" : scope === "team" ? "/requests?scope=team&insight=new-hires-it" : "/requests?scope=mine&status=OPEN",
+    href: scope === "org" ? "/requests?scope=all&insight=new-hires-it" : scope === "team" ? "/requests?scope=team&insight=new-hires-it" : `/requests?scope=mine&status=OPEN${itCategory ? `&categoryId=${itCategory.id}` : ""}`,
   } as const;
 }

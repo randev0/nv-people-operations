@@ -115,11 +115,12 @@ async function Today({ me, showAll, now }: { me: Awaited<ReturnType<typeof requi
           <h2 id="insight-h" className="text-[15px] font-semibold tracking-[-0.02em]">IT equipment for new hires</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {insight.scope === "self" ? (
-              <>You have {plural(insight.requests, "open IT equipment request")}; the oldest was opened {plural(insight.oldestDays, "day")} ago.</>
+              <>You have {plural(insight.requests, "open IT equipment request")}{insight.requests === 1 ? ", opened" : "; the oldest was opened"} {plural(insight.oldestDays, "day")} ago.</>
             ) : (
               <>
                 {plural(insight.hires, insight.scope === "team" ? "person in your team" : "person", insight.scope === "team" ? "people in your team" : "people")} who joined in the last 60 days {insight.hires === 1 ? "has" : "have"}{" "}
-                {plural(insight.requests, "open IT equipment request")}; the oldest was opened {plural(insight.oldestDays, "day")} ago.
+                {plural(insight.requests, "open IT equipment request")}
+                {insight.requests === 1 ? ", opened" : "; the oldest was opened"} {plural(insight.oldestDays, "day")} ago.
               </>
             )}
           </p>
