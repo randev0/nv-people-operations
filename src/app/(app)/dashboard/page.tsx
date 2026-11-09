@@ -109,27 +109,26 @@ const toRow = (i: WorkItem): WorkRow => ({
 
 const isAssign = (i: WorkItem) => i.action.kind === "link" && i.action.label === "Assign";
 
-/** One sentence from live data; the link opens exactly these requests (insight=new-hires-it). */
-function EquipmentLine({ insight }: { insight: Insight }) {
+/** The new-hire IT-equipment card; counts and the link come from todayInsight (insight=new-hires-it). */
+function EquipmentCard({ insight }: { insight: Insight }) {
   if (insight.requests === 0) return null;
-  const text =
-    insight.scope === "self"
-      ? `You have ${plural(insight.requests, "open IT equipment request")}.`
-      : `${plural(insight.hires, insight.scope === "team" ? "new hire in your team" : "new hire", insight.scope === "team" ? "new hires in your team" : "new hires")} ${insight.hires === 1 ? "has" : "have"} ${
-          insight.requests === insight.hires ? "open IT equipment requests" : plural(insight.requests, "open IT equipment request")
-        }.`;
   return (
-    <section aria-label="IT equipment for new hires" className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-dashed px-5 py-3 text-sm">
-      <span className="iridescent hidden h-2 w-2 shrink-0 rounded-full sm:block" aria-hidden />
-      <span>
-        {text}{" "}
-        <span className="text-muted-foreground">
-          {insight.scope === "self" ? "" : "Joined in the last 60 days · "}oldest opened {plural(insight.oldestDays, "day")} ago
-        </span>
-      </span>
-      <Link href={insight.href} className="ml-auto inline-flex items-center gap-1 rounded font-medium text-link hover:underline">
-        Review requests <ArrowRight className="h-4 w-4" aria-hidden />
-      </Link>
+    <section aria-labelledby="insight-h" className="holo-edge mt-5 max-w-[340px] rounded-2xl bg-card px-4 py-4">
+      <h2 id="insight-h" className="text-[15px] font-semibold tracking-[-0.02em]">IT equipment for new hires</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {insight.scope === "self" ? (
+          <>You have {plural(insight.requests, "open IT equipment request")}{insight.requests === 1 ? ", opened" : "; the oldest was opened"} {plural(insight.oldestDays, "day")} ago.</>
+        ) : (
+          <>
+            {plural(insight.hires, insight.scope === "team" ? "person in your team" : "person", insight.scope === "team" ? "people in your team" : "people")} who joined in the last 60 days {insight.hires === 1 ? "has" : "have"}{" "}
+            {plural(insight.requests, "open IT equipment request")}
+            {insight.requests === 1 ? ", opened" : "; the oldest was opened"} {plural(insight.oldestDays, "day")} ago.
+          </>
+        )}
+      </p>
+      <Button asChild size="sm" variant="outline" className="mt-3">
+        <Link href={insight.href}>Review requests <ArrowRight aria-hidden /></Link>
+      </Button>
     </section>
   );
 }
@@ -246,7 +245,7 @@ async function Today({ me, now, list }: { me: Me; now: Date; list?: string }) {
         )}
       </section>
 
-      <EquipmentLine insight={insight} />
+      <EquipmentCard insight={insight} />
     </>
   );
 }

@@ -237,7 +237,7 @@ test("manager: team-only follow-ups and equipment line; Insights shows team repo
     expect(teamNames.some((n) => t.includes(n))).toBe(true);
   }
   const line = page.getByRole("region", { name: "IT equipment for new hires" });
-  await expect(line).toContainText(/new hires? in your team (has|have)/);
+  await expect(line).toContainText(/in your team who joined in the last 60 days/);
   await line.getByRole("link", { name: "Review requests" }).click();
   await expect(page).toHaveURL(/scope=team&insight=new-hires-it/);
 

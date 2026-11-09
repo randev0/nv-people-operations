@@ -67,10 +67,10 @@ test.describe.serial("presentation verification flows", () => {
     const line = page.getByRole("region", { name: "IT equipment for new hires" });
     // People and requests are counted separately and both are stated.
     const text = (await line.innerText()).replace(/\s+/g, " ");
-    // "N new hires have open IT equipment requests." (one each) or "... have M open IT equipment requests."
-    const m = text.match(/(\d+) new hires? (?:has|have) (?:(\d+) )?open IT equipment requests?/)!;
+    // People and requests are counted separately and both are stated.
+    const m = text.match(/(\d+) (?:person|people) who joined in the last 60 days (?:has|have) (\d+) open IT equipment requests?/)!;
     const hires = Number(m[1]);
-    const requests = m[2] ? Number(m[2]) : hires;
+    const requests = Number(m[2]);
     expect(hires).toBeGreaterThan(0);
     // Insights states the same two numbers.
     await page.goto("/dashboard?tab=insights");

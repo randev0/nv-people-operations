@@ -141,3 +141,6 @@
 - Figure cards: a tinted icon per figure, one line of live context and, for HR, a thin meter: open requests (8 in progress · 19 opened this week), unassigned (33% of open), onboarding (74% of tasks done · 6 behind; from the active checklists), overdue (9 waiting on other tasks). A faint glow in the card's colour, stronger on hover; nothing animates on its own. Cards with zero go neutral.
 - Test fix: the figure helper read the value with `count()` before the streamed page content had replaced the loading state, so it fell back to the hint text and parsed NaN. It now waits for the link first. Value spans carry `data-value`.
 - Checks: lint 0, typecheck 0, unit 36/36, e2e 20/20 twice (axe 24 pages, 0 violations); no horizontal overflow at 1440, 1280, 390.
+
+## 2026-11-10 — Equipment card restored on Today
+- Feedback: the one-line equipment sentence was less clear than the earlier card. Restored the earlier card exactly (holo edge, heading "IT equipment for new hires", "5 people who joined in the last 60 days have 5 open IT equipment requests; the oldest was opened 15 days ago.", outline "Review requests" button), 340 px wide as before, below the work list. Tests switched back to the card's wording. e2e 20/20.
