@@ -32,7 +32,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: SP 
   ];
   const params = {
     scope: sp(raw.scope) ?? defaultScope, status: sp(raw.status), categoryId: sp(raw.categoryId),
-    priority: sp(raw.priority), countryCode: sp(raw.countryCode), q: sp(raw.q), insight: sp(raw.insight), resolved: sp(raw.resolved), page: sp(raw.page),
+    priority: sp(raw.priority), countryCode: sp(raw.countryCode), q: sp(raw.q), insight: sp(raw.insight), resolved: sp(raw.resolved), sort: sp(raw.sort), page: sp(raw.page),
   };
   const parsed = listRequestsQuery.safeParse(Object.fromEntries(Object.entries(params).filter(([, v]) => v)));
   const [categories, result] = await Promise.all([
@@ -86,6 +86,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: SP 
         <input type="hidden" name="scope" value={params.scope} />
         {params.insight ? <input type="hidden" name="insight" value={params.insight} /> : null}
         {params.resolved ? <input type="hidden" name="resolved" value={params.resolved} /> : null}
+        {params.sort ? <input type="hidden" name="sort" value={params.sort} /> : null}
         <label className="min-w-[14rem] flex-1 text-sm">
           <span className="sr-only">Search</span>
           <input name="q" defaultValue={params.q} placeholder="Search title, requester or #number" className="h-9 w-full rounded-md border border-input bg-card px-3 placeholder:text-muted-foreground" />

@@ -8,6 +8,7 @@ import { sp } from "@/server/page";
 import { PageHeader, EmptyState } from "@/components/common/page-header";
 import { Pagination } from "@/components/common/pagination";
 import { ProgressSummary } from "@/components/onboarding/progress-summary";
+import { ProgressRing } from "@/components/dashboard/brand-viz";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,11 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const params = { progress: sp(raw.progress), countryCode: sp(raw.countryCode), page: sp(raw.page) };
   const q = listOnboardingQuery.parse(Object.fromEntries(Object.entries(params).filter(([, v]) => v)));
   const { data, meta } = await listOnboardings(me, q);
-  const own = await getOwnOnboardingId(me.id);
+  const [own, active] = await Promise.all([getOwnOnboardingId(me.id), listOnboardings(me, { page: 1, pageSize: 100, progress: "active" })]);
+  // "Onboarding now": checklists in progress with overdue or blocked work, most overdue first.
+  const now = active.data
+    .filter((o) => o.progress.overdue || o.progress.blocked)
+    .sort((a, b) => b.progress.overdue - a.progress.overdue || b.progress.blocked - a.progress.blocked || a.employee.name.localeCompare(b.employee.name));
   const tabs = [
     { key: undefined, label: "All" },
     { key: "active", label: "In progress" },
@@ -51,6 +56,32 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
           </>
         }
       />
+      {now.length && !params.page ? (
+        <section aria-labelledby="onb-now-h" className="surface mb-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-3">
+            <h2 id="onb-now-h" className="text-[15px] font-semibold tracking-[-0.02em]">Onboarding now <span className="font-normal text-muted-foreground">({now.length})</span></h2>
+            <p className="text-xs text-muted-foreground">Checklists with overdue or blocked tasks, most overdue first</p>
+          </div>
+          <ul className="-mt-px grid sm:grid-cols-2 lg:grid-cols-3">
+            {now.slice(0, 6).map((o) => (
+              <li key={o.id} className="border-t">
+                <Link href={`/onboarding/${o.id}`} className="flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-white/[0.03]">
+                  <ProgressRing value={o.progress.completed} total={o.progress.total} size={32} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{o.employee.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{COUNTRY_LABEL[o.employee.countryCode]} · {o.progress.completed}/{o.progress.total} done</span>
+                  </span>
+                  {o.progress.overdue ? (
+                    <span className="shrink-0 rounded-full border border-danger/40 bg-danger/10 px-2 py-0.5 text-[11px] text-danger">{o.progress.overdue} overdue</span>
+                  ) : (
+                    <span className="shrink-0 rounded-full border border-warning/35 bg-warning/10 px-2 py-0.5 text-[11px] text-warning">{o.progress.blocked} blocked</span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <nav className="mb-4 flex gap-1 border-b" aria-label="Progress filter">
         {tabs.map((t) => (
           <Link key={t.label} href={t.key ? `/onboarding?progress=${t.key}` : "/onboarding"} aria-current={params.progress === t.key ? "page" : undefined}

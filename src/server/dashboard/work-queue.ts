@@ -58,6 +58,8 @@ export type WorkItem = {
   reason: string;
   /** Row label when more specific than the rule name (request priority). */
   badge?: string;
+  /** Structured facts for compact rows (requests). */
+  facts?: { priority: "URGENT" | "HIGH" | "MEDIUM" | "LOW"; category: string; age: string };
   /** Shown only when someone other than the viewer is (or should be) responsible. */
   owner: string | null;
   href: string;
@@ -157,6 +159,7 @@ export async function workQueue(actor: Actor, now: Date = new Date()): Promise<W
       person: r.requester.name,
       reason: `${r.category.name} · opened ${ago(r.createdAt, now)}, nobody assigned yet`,
       badge: `${PRIORITY_NAME[r.priority]} priority`,
+      facts: { priority: r.priority, category: r.category.name, age: ago(r.createdAt, now) },
       owner: null, // the reason already says nobody is assigned
       href: `/requests/${r.id}`,
       action: { kind: "link", href: `/requests/${r.id}`, label: "Assign" },

@@ -22,7 +22,7 @@ function useAction() {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  async function run(label: string, fn: () => Promise<unknown>, done: string, onDone?: () => void) {
+  async function run(label: string, fn: () => Promise<unknown>, done: string, onDone?: () => void, onFail?: (err: unknown) => void) {
     setPending(label);
     setError(null);
     setSuccess(null);
@@ -34,6 +34,7 @@ function useAction() {
     } catch (err) {
       setError(errorText(err));
       if (err instanceof ApiError && err.code === "STALE_VERSION") router.refresh();
+      onFail?.(err);
     } finally {
       setPending(null);
     }
@@ -69,7 +70,13 @@ export function RequestHeaderActions({ request }: { request: ReqInfo }) {
 }
 
 /** "Next step" content for assigners: AI routing note, person search and picker on one line. */
-export function AssignmentPanel({ request, suggestion, onAssigned }: { request: ReqInfo; suggestion: Suggestion; onAssigned?: (assigneeName: string) => void }) {
+export function AssignmentPanel({ request, suggestion, onAssigned, onConflict }: {
+  request: ReqInfo;
+  suggestion: Suggestion;
+  onAssigned?: (assigneeName: string) => void;
+  /** Called when the server refuses because the request changed (stale version or no longer assignable). */
+  onConflict?: () => void;
+}) {
   const { pending, error, success, run } = useAction();
   const [options, setOptions] = useState<Option[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -134,7 +141,9 @@ export function AssignmentPanel({ request, suggestion, onAssigned }: { request: 
           e.preventDefault();
           if (!assigneeId) return;
           const name = chosen?.name ?? "the selected person";
-          run("assign", () => api(`/requests/${request.id}/assign`, { method: "POST", body: { assigneeId, expectedVersion: request.version } }), `Assigned to ${name}`, () => onAssigned?.(name));
+          run("assign", () => api(`/requests/${request.id}/assign`, { method: "POST", body: { assigneeId, expectedVersion: request.version } }), `Assigned to ${name}`, () => onAssigned?.(name), (err) => {
+            if (err instanceof ApiError && err.status === 409) onConflict?.();
+          });
         }}
       >
         <div className="min-w-[12rem] flex-1 basis-48 space-y-1">

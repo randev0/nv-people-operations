@@ -39,8 +39,11 @@ test.describe.serial("presentation verification flows", () => {
   test("2 · manager finds the unassigned team request, assigns it, sees the new state; filters survive the round trip", async ({ page }) => {
     await signIn(page, "manager.my@example.com");
     // Today lists it as assignment work; the "Unassigned" figure opens the team's list.
-    await page.goto("/dashboard?queue=all");
-    await expect(page.getByRole("listitem").filter({ hasText: TITLE }).getByRole("button", { name: /^Assign/ })).toBeVisible();
+    await page.goto("/dashboard");
+    const assignTab = page.getByRole("tab", { name: /^Assign requests · \d+/ });
+    await expect(assignTab).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("button", { name: "Select", exact: true }).click(); // selection mode lists every assignable request
+    await expect(page.getByRole("checkbox", { name: new RegExp(TITLE) })).toBeVisible();
     await page.getByRole("link", { name: /^Unassigned/ }).click();
     await expect(page).toHaveURL(/scope=team.*status=SUBMITTED|status=SUBMITTED.*scope=team/);
     await page.getByRole("row", { name: new RegExp(TITLE) }).getByRole("link", { name: TITLE }).click();
@@ -64,9 +67,17 @@ test.describe.serial("presentation verification flows", () => {
     const line = page.getByRole("region", { name: "IT equipment for new hires" });
     // People and requests are counted separately and both are stated.
     const text = (await line.innerText()).replace(/\s+/g, " ");
-    const m = text.match(/(\d+) (?:person|people) who joined in the last 60 days (?:has|have) (\d+) open IT equipment requests?/)!;
-    const requests = Number(m[2]);
-    expect(Number(m[1])).toBeGreaterThan(0);
+    // "N new hires have open IT equipment requests." (one each) or "... have M open IT equipment requests."
+    const m = text.match(/(\d+) new hires? (?:has|have) (?:(\d+) )?open IT equipment requests?/)!;
+    const hires = Number(m[1]);
+    const requests = m[2] ? Number(m[2]) : hires;
+    expect(hires).toBeGreaterThan(0);
+    // Insights states the same two numbers.
+    await page.goto("/dashboard?tab=insights");
+    const panel = page.getByRole("region", { name: "IT equipment for new hires" });
+    await expect(panel.getByRole("link", { name: /^Open requests/ })).toContainText(String(requests));
+    await expect(panel).toContainText(`New hires waiting${hires}`);
+    await page.goto("/dashboard");
     await line.getByRole("link", { name: "Review requests" }).click();
     await expect(page).toHaveURL(/insight=new-hires-it/);
     await expect(page.getByText("New hires waiting on IT equipment:")).toBeVisible();
@@ -82,40 +93,51 @@ test.describe.serial("presentation verification flows", () => {
     await expect(page).toHaveURL(/insight=new-hires-it/);
   });
 
-  test("5 · HR dashboard: chase list in the first screen, every figure matches the list it opens, reporting below", async ({ page }) => {
+  test("5 · HR dashboard: Today and Insights tabs; every figure matches the list it opens; all required reporting in Insights", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await signIn(page, "hr.admin@example.com");
-    await expect(page.getByRole("navigation", { name: "Dashboard views" })).toHaveCount(0); // one page, no tabs
-    const firstTask = page.getByRole("region", { name: /^Onboarding to chase/ }).getByRole("listitem").first();
-    await expect(firstTask).toBeVisible();
-    await firstTask.getByRole("link", { name: /Open checklist/ }).click();
-    await expect(page).toHaveURL(/\/onboarding\/[0-9a-f-]+#task-/);
+    const views = page.getByRole("navigation", { name: "Dashboard views" });
+    await expect(views.getByRole("link", { name: "Today" })).toHaveAttribute("aria-current", "page");
+    // The core of Today fits a laptop screen: the work list and the equipment line are above the fold.
+    const attention = page.getByRole("region", { name: "Needs your attention" });
+    await expect(attention.getByRole("tabpanel").getByRole("listitem").first()).toBeInViewport();
+    await expect(page.getByRole("region", { name: "IT equipment for new hires" })).toBeInViewport();
+    expect(await page.getByRole("region", { name: "Open requests by status" }).count()).toBe(0); // reporting is not on Today
 
-    const figure = async (name: RegExp) => {
-      await page.goto("/dashboard");
+    const figure = async (path: string, name: RegExp) => {
+      await page.goto(path);
       const l = page.getByRole("link", { name }).first();
       const n = Number((await l.locator(":scope > span").nth(1).textContent())!.trim());
       await l.click();
       return n;
     };
     const count = (n: number) => page.getByText(n === 0 ? "No requests match these filters." : `${n} request${n === 1 ? "" : "s"}`, { exact: true });
-    await expect(count(await figure(/^Open requests/))).toBeVisible();
-    await expect(count(await figure(/^Unassigned/))).toBeVisible();
-    const overdue = await figure(/^Overdue tasks/);
+    await expect(count(await figure("/dashboard", /^Open requests/))).toBeVisible();
+    await expect(count(await figure("/dashboard", /^Unassigned/))).toBeVisible();
+    const overdue = await figure("/dashboard", /^Overdue tasks/);
     await expect(page).toHaveURL(/\/onboarding\/overdue$/);
     await expect(page.getByRole("main").getByRole("listitem")).toHaveCount(overdue);
-    await expect(count(await figure(/^Resolved, last 7 days/))).toBeVisible();
+    await expect(count(await figure("/dashboard?tab=insights", /^Resolved, last 7 days/))).toBeVisible();
+    // Insights' overdue total opens the same list.
+    const overdue2 = await figure("/dashboard?tab=insights", /^Overdue\s*\d+$/);
+    expect(overdue2).toBe(overdue);
+    await expect(page).toHaveURL(/\/onboarding\/overdue$/);
 
-    // Reporting required by the brief is on the same page, under "At a glance".
     await page.goto("/dashboard");
-    const glance = page.getByRole("region", { name: "At a glance" });
-    for (const name of ["Open requests by status", "Open requests by category", "Headcount by office", "Request flow"]) {
-      await expect(glance.getByRole("region", { name })).toBeVisible();
+    await views.getByRole("link", { name: "Insights" }).click();
+    await expect(page).toHaveURL(/tab=insights/);
+    await expect(views.getByRole("link", { name: "Insights" })).toHaveAttribute("aria-current", "page");
+    for (const name of ["Overdue onboarding tasks", "IT equipment for new hires", "Onboarding progress", "Open requests by status", "Open requests by category", "Headcount by office", "Request flow"]) {
+      await expect(page.getByRole("region", { name })).toBeVisible();
     }
-    // Old Insights links land on that section.
-    await page.goto("/dashboard?tab=insights");
-    await expect(page).toHaveURL(/\/dashboard#at-a-glance$/);
+    // Overdue by office narrows the overdue list.
+    const office = page.getByRole("list", { name: "Overdue tasks by office" }).getByRole("link").first();
+    const perOffice = Number((await office.locator("span").textContent())!.trim());
+    await office.click();
+    await expect(page).toHaveURL(/countryCode=/);
+    await expect(page.getByRole("main").getByRole("listitem")).toHaveCount(perOffice);
     // Office pins: keyboard focus reveals city and country.
+    await page.goto("/dashboard?tab=insights");
     const pin = page.getByRole("link", { name: /^Nicosia, Cyprus:/ });
     await expect(pin.getByRole("tooltip")).toHaveCSS("opacity", "0");
     await pin.focus();

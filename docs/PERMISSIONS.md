@@ -38,7 +38,7 @@ All checks live in `src/server/auth/permissions.ts` and are applied by domain se
 
 - **Today work queue** (`src/server/dashboard/work-queue.ts`) is built only from records the viewer can act on, using the shared predicates: task `allowedActions` (owner only), `allowedActionsFor` for requests (START/RESOLVE assignee only; CLOSE requester), and `canAssignRequest` for submitted requests (HR: all; manager: direct reports' requests, never their own). Actions call the existing endpoints, which re-check permissions.
 - **Equipment insight filter** `insight=new-hires-it` on `GET /requests`: HR in any scope; managers too, but the list's read scope and list scope still apply, so a manager only gets their team's requests. Employees: 403.
-- **Onboarding to chase** (`overdueToChase`): HR sees every overdue task, managers only tasks in their direct reports' checklists, employees none; tasks owned by the viewer are excluded. Read-only list; the row opens the checklist, which re-checks read access.
+- **Onboarding follow-ups** (`overdueToChase`): HR sees every overdue task, managers only tasks in their direct reports' checklists, employees none; tasks owned by the viewer are excluded. Read-only list; the row opens the checklist, which re-checks read access.
 - **Assign sheet**: loads the request and eligible assignees through the same API routes as the record page, so the same 404/403 rules apply.
 - **Overdue task list** `/onboarding/overdue`: HR all checklists, managers their direct reports' checklists, employees refused (they use My Work). Rows link to the checklist, which re-checks read access.
 - **Bulk assign**: no new endpoint; each request goes through `POST /requests/:id/assign`, so `canAssignRequest`, eligibility and the version check apply per request.

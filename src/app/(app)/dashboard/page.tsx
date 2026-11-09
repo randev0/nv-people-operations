@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ArrowRight, Inbox, UserPlus } from "lucide-react";
 import { requireUser } from "@/server/auth/current-user";
 import { isHrAdmin, isManager } from "@/server/auth/permissions";
@@ -11,30 +10,56 @@ import { Button } from "@/components/ui/button";
 import { CompactGreeting } from "@/components/dashboard/greeting";
 import { ManagerAtAGlance, OrgAtAGlance } from "@/components/dashboard/at-a-glance";
 import { ProgressRing } from "@/components/dashboard/brand-viz";
-import { WorkList, type WorkRow } from "@/components/dashboard/work-list";
-import { blockedReason } from "@/lib/onboarding-text";
-import { COUNTRY_LABEL, formatCalendarDate } from "@/lib/format";
+import { AttentionTabs, type AttentionTab, type TabKey } from "@/components/dashboard/attention-tabs";
+import type { WorkRow } from "@/components/dashboard/work-list";
+import { COUNTRY_LABEL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Dashboard · People Operations" };
 
-const PER_GROUP = 3;
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 type SP = Promise<Record<string, string | string[] | undefined>>;
 type Me = Awaited<ReturnType<typeof requireUser>>;
+type Insight = Awaited<ReturnType<typeof todayInsight>>;
 
+/**
+ * Dashboard with two views: Today (daily work: figures, one work list at a time, one
+ * equipment line) and Insights (the assessment's reporting). Employees have no
+ * organisation reporting, so they get Today only. Both views share one column width.
+ */
 export default async function DashboardPage({ searchParams }: { searchParams: SP }) {
   const me = await requireUser();
   const raw = await searchParams;
-  // The old Insights tab is now the "At a glance" section of this page.
-  if (sp(raw.tab) === "insights") redirect("/dashboard#at-a-glance");
-  const showAll = sp(raw.queue) === "all";
+  const reporting = isHrAdmin(me) || isManager(me);
+  const view = reporting && sp(raw.tab) === "insights" ? "insights" : "today";
   const now = new Date();
 
   return (
-    <div className="mx-auto w-full max-w-[1280px]">
+    <div className="mx-auto w-full max-w-[1080px]">
       <CompactGreeting firstName={me.name.split(" ")[0]} countryCode={me.countryCode} initialNow={now.toISOString()} />
-      {await Today({ me, showAll, now })}
+      {reporting ? (
+        <nav aria-label="Dashboard views" className="mb-6 flex gap-1 border-b">
+          {(
+            [
+              { key: "today", label: "Today", href: "/dashboard" },
+              { key: "insights", label: "Insights", href: "/dashboard?tab=insights" },
+            ] as const
+          ).map((t) => (
+            <Link
+              key={t.key}
+              href={t.href}
+              aria-current={view === t.key ? "page" : undefined}
+              className={cn(
+                "-mb-px border-b-2 px-4 py-2.5 text-[15px] transition-colors",
+                view === t.key ? "border-primary font-semibold text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
+      {view === "insights" ? await Insights({ me, now }) : await Today({ me, now, list: sp(raw.list) })}
     </div>
   );
 }
@@ -55,73 +80,96 @@ function Kpi({ label, value, hint, href, tone }: { label: string; value: number;
 
 const toRow = (i: WorkItem): WorkRow => ({
   key: i.key, tier: i.tier, tierLabel: i.badge ?? TIER_LABEL[i.tier], title: i.title, person: i.person, reason: i.reason, owner: i.owner, href: i.href,
-  action: i.action.kind === "link" && i.action.label === "Assign" ? { kind: "assign", id: i.key.slice("request:".length), label: "Assign" } : i.action,
+  action: i.action,
 });
 
-function Group({ id, title, count, note, viewAll, children }: { id: string; title: string; count: number; note: string; viewAll?: { href: string; label: string }; children: React.ReactNode }) {
+const isAssign = (i: WorkItem) => i.action.kind === "link" && i.action.label === "Assign";
+
+/** One sentence from live data; the link opens exactly these requests (insight=new-hires-it). */
+function EquipmentLine({ insight }: { insight: Insight }) {
+  if (insight.requests === 0) return null;
+  const text =
+    insight.scope === "self"
+      ? `You have ${plural(insight.requests, "open IT equipment request")}.`
+      : `${plural(insight.hires, insight.scope === "team" ? "new hire in your team" : "new hire", insight.scope === "team" ? "new hires in your team" : "new hires")} ${insight.hires === 1 ? "has" : "have"} ${
+          insight.requests === insight.hires ? "open IT equipment requests" : plural(insight.requests, "open IT equipment request")
+        }.`;
   return (
-    <section aria-labelledby={`${id}-h`} id={id} className="scroll-mt-6">
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h3 id={`${id}-h`} className="text-[15px] font-semibold tracking-[-0.02em]">
-          {title} <span className="font-normal text-muted-foreground">({count})</span>
-        </h3>
-        <span className="text-xs text-muted-foreground">{note}</span>
-      </div>
-      {children}
-      {viewAll ? (
-        <p className="mt-2 text-right">
-          <Link href={viewAll.href} className="inline-flex items-center gap-1 rounded text-sm font-medium text-link hover:underline">
-            {viewAll.label} <ArrowRight className="h-4 w-4" aria-hidden />
-          </Link>
-        </p>
-      ) : null}
+    <section aria-label="IT equipment for new hires" className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-dashed px-5 py-3 text-sm">
+      <span className="iridescent hidden h-2 w-2 shrink-0 rounded-full sm:block" aria-hidden />
+      <span>
+        {text}{" "}
+        <span className="text-muted-foreground">
+          {insight.scope === "self" ? "" : "Joined in the last 60 days · "}oldest opened {plural(insight.oldestDays, "day")} ago
+        </span>
+      </span>
+      <Link href={insight.href} className="ml-auto inline-flex items-center gap-1 rounded font-medium text-link hover:underline">
+        Review requests <ArrowRight className="h-4 w-4" aria-hidden />
+      </Link>
     </section>
   );
 }
 
-async function Today({ me, showAll, now }: { me: Me; showAll: boolean; now: Date }) {
+async function Today({ me, now, list }: { me: Me; now: Date; list?: string }) {
   const hr = isHrAdmin(me);
   const mgr = isManager(me);
-  const [queue, chase, insight, active, own, org, mine] = await Promise.all([
+  const [queue, chase, insight, own, org, mine] = await Promise.all([
     workQueue(me, now),
     overdueToChase(me, now),
     todayInsight(me, now),
-    listOnboardings(me, { page: 1, pageSize: 100, progress: "active" }),
     getOwnOnboardingId(me.id),
     hr ? orgDashboard(me) : Promise.resolve(null),
     hr ? Promise.resolve(null) : myDashboard(me),
   ]);
-  const toAssign = queue.filter((i) => i.action.kind === "link" && i.action.label === "Assign");
-  const myWork = queue.filter((i) => !toAssign.includes(i));
-  const take = <T,>(xs: T[]) => (showAll ? xs : xs.slice(0, PER_GROUP));
+  const toAssign = queue.filter(isAssign);
+  const myWork = queue.filter((i) => !isAssign(i));
   const scope = hr ? "all" : "team";
-  const chaseRows: WorkRow[] = chase.map((t) => ({
-    key: `chase:${t.id}`,
-    tier: "OVERDUE",
-    tierLabel: `${plural(t.daysOverdue, "day")} overdue`,
-    title: t.title,
-    person: t.hire,
-    reason:
-      `Due ${formatCalendarDate(t.dueDate).replace(/ \d{4}$/, "")}` +
-      (t.state === "BLOCKED" ? ` · ${blockedReason(t.prerequisites).replace(/^Waiting/, "waiting")}` : t.state === "IN_PROGRESS" ? " · started, not finished" : " · not started"),
-    owner: `Owner ${t.owner} (${t.department})`,
-    href: `/onboarding/${t.onboardingId}#task-${t.id}`,
-    action: { kind: "link", href: `/onboarding/${t.onboardingId}#task-${t.id}`, label: "Open checklist" },
-  }));
-  const attentionTotal = toAssign.length + myWork.length + chase.length;
-  const onboardingRows = [...active.data].sort((a, b) => b.progress.overdue - a.progress.overdue || b.progress.blocked - a.progress.blocked || a.employee.name.localeCompare(b.employee.name));
+
+  const tabs: AttentionTab[] = [];
+  if (hr || mgr) {
+    tabs.push({
+      key: "assign",
+      label: "Assign requests",
+      count: toAssign.length,
+      viewAll: `/requests?scope=${scope}&status=SUBMITTED&sort=priority`,
+      rows: toAssign.map((i) => ({
+        id: i.key.slice("request:".length),
+        title: i.title,
+        href: i.href,
+        priority: i.facts!.priority,
+        employee: i.person,
+        category: i.facts!.category,
+        age: i.facts!.age,
+      })),
+    });
+    tabs.push({
+      key: "followups",
+      label: "Onboarding follow-ups",
+      count: chase.length,
+      viewAll: "/onboarding/overdue?owner=others",
+      rows: chase.map((t) => ({ id: t.id, title: t.title, href: `/onboarding/${t.onboardingId}#task-${t.id}`, employee: t.hire, owner: t.owner, daysOverdue: t.daysOverdue })),
+    });
+  }
+  // Own work (tasks you own, requests assigned to you, fixes to confirm) is its own tab
+  // for HR and managers only when there is some; for everyone else it is the whole list.
+  if (!(hr || mgr) || myWork.length) {
+    tabs.push({ key: "own", label: "Your tasks", count: myWork.length, viewAll: "/my-work", rows: myWork.map(toRow) });
+  }
+  const valid = (k?: string): k is TabKey => tabs.some((t) => t.key === k);
+  const initial: TabKey = valid(list) ? list : (tabs.find((t) => t.count > 0)?.key ?? tabs[0].key);
+  const total = tabs.reduce((n, t) => n + t.count, 0);
 
   const kpis = hr && org
     ? [
         { label: "Open requests", value: org.openRequests.total, hint: "Not yet resolved", href: "/requests?scope=all&status=OPEN" },
-        { label: "Unassigned", value: org.openRequests.byStatus.find((s) => s.status === "SUBMITTED")?.count ?? 0, hint: "Waiting for an assignee", href: "/requests?scope=all&status=SUBMITTED", tone: "warning" as const },
+        { label: "Unassigned", value: org.openRequests.byStatus.find((s) => s.status === "SUBMITTED")?.count ?? 0, hint: "Waiting for an assignee", href: "/requests?scope=all&status=SUBMITTED&sort=priority", tone: "warning" as const },
         { label: "Onboarding", value: org.onboarding.activeHires, hint: "New hires with tasks left", href: "/onboarding?progress=active" },
         { label: "Overdue tasks", value: org.onboarding.overdueTasks, hint: "Past due, hire's local date", href: "/onboarding/overdue", tone: "danger" as const },
       ]
     : mine?.team
       ? [
           { label: "Team open requests", value: mine.team.openRequests, hint: "Your direct reports", href: "/requests?scope=team&status=OPEN" },
-          { label: "Unassigned", value: mine.team.unassigned, hint: "Team requests to assign", href: "/requests?scope=team&status=SUBMITTED", tone: "warning" as const },
+          { label: "Unassigned", value: mine.team.unassigned, hint: "Team requests to assign", href: "/requests?scope=team&status=SUBMITTED&sort=priority", tone: "warning" as const },
           { label: "Team onboarding", value: mine.team.activeOnboardings, hint: "Checklists in progress", href: "/onboarding?progress=active" },
           { label: "Team overdue tasks", value: mine.team.overdueTasks, hint: "Past due, hire's local date", href: "/onboarding/overdue", tone: "danger" as const },
         ]
@@ -136,109 +184,139 @@ async function Today({ me, showAll, now }: { me: Me; showAll: boolean; now: Date
 
   return (
     <>
-      <h2 className="sr-only">Key figures</h2>
-      <section aria-label="Key figures" className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <section aria-label="Key figures" className="mb-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((k) => <Kpi key={k.label} {...k} />)}
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <section aria-labelledby="attention-h" className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="attention-h" className="text-lg font-semibold tracking-[-0.02em]">Needs your attention</h2>
-            {attentionTotal ? <p className="text-sm text-muted-foreground">{plural(attentionTotal, "item")} · most urgent first in each group</p> : null}
+      <section aria-labelledby="attention-h">
+        <h2 id="attention-h" className="mb-3 text-lg font-semibold tracking-[-0.02em]">Needs your attention</h2>
+        {total === 0 ? (
+          <div className="dot-grid rounded-2xl border border-dashed bg-card/60 px-6 py-10 text-center">
+            <p className="text-[15px] font-medium">You&apos;re all caught up.</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">Nothing needs your action right now. New tasks and requests will appear here.</p>
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <Button asChild variant="outline" size="sm"><Link href="/requests"><Inbox aria-hidden /> Requests</Link></Button>
+              <Button asChild variant="outline" size="sm"><Link href={own && me.role === "EMPLOYEE" ? `/onboarding/${own}` : "/onboarding"}><UserPlus aria-hidden /> Onboarding</Link></Button>
+            </div>
           </div>
+        ) : (
+          <AttentionTabs tabs={tabs} initial={initial} />
+        )}
+      </section>
 
-          {attentionTotal === 0 ? (
-            <div className="dot-grid rounded-2xl border border-dashed bg-card/60 px-6 py-10 text-center">
-              <p className="text-[15px] font-medium">You&apos;re all caught up.</p>
-              <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">Nothing needs your action right now. New tasks and requests will appear here.</p>
-              <div className="mt-5 flex flex-wrap justify-center gap-2">
-                <Button asChild variant="outline" size="sm"><Link href="/requests"><Inbox aria-hidden /> Requests</Link></Button>
-                <Button asChild variant="outline" size="sm"><Link href={own && me.role === "EMPLOYEE" ? `/onboarding/${own}` : "/onboarding"}><UserPlus aria-hidden /> Onboarding</Link></Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {toAssign.length ? (
-                <Group
-                  id="to-assign"
-                  title="Requests to assign"
-                  count={toAssign.length}
-                  note="Urgent and high priority first, then oldest"
-                  viewAll={toAssign.length > PER_GROUP && !showAll ? { href: "/dashboard?queue=all#to-assign", label: `View all ${toAssign.length}` } : showAll ? { href: `/requests?scope=${scope}&status=SUBMITTED`, label: "Open in Requests" } : undefined}
-                >
-                  <WorkList rows={take(toAssign).map(toRow)} emptyState={null} />
-                </Group>
-              ) : null}
-              {myWork.length ? (
-                <Group
-                  id="my-work"
-                  title={hr || mgr ? "Your own tasks" : "Your work"}
-                  count={myWork.length}
-                  note="Overdue, then blocking others, then priority"
-                  viewAll={myWork.length > PER_GROUP && !showAll ? { href: "/dashboard?queue=all#my-work", label: `View all ${myWork.length}` } : undefined}
-                >
-                  <WorkList rows={take(myWork).map(toRow)} emptyState={null} />
-                </Group>
-              ) : null}
-              {chase.length ? (
-                <Group
-                  id="chase"
-                  title={hr ? "Onboarding to chase" : "Team onboarding to chase"}
-                  count={chase.length}
-                  note="Overdue tasks owned by others, most overdue first"
-                  viewAll={chase.length > PER_GROUP ? { href: "/onboarding/overdue?owner=others", label: `View all ${chase.length}` } : undefined}
-                >
-                  <WorkList rows={take(chaseRows)} emptyState={null} />
-                </Group>
-              ) : null}
-              {showAll ? (
-                <p><Link href="/dashboard" className="rounded text-sm font-medium text-link hover:underline">Show the top {PER_GROUP} of each group</Link></p>
-              ) : null}
-              <details className="text-sm text-muted-foreground">
-                <summary className="cursor-pointer rounded text-xs hover:text-foreground">How these lists are chosen and ordered</summary>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
-                  <li><strong className="font-medium text-foreground">Requests to assign</strong>: submitted requests you may assign (HR: all; managers: their direct reports&apos;). Urgent, then high priority, then oldest.</li>
-                  <li><strong className="font-medium text-foreground">Your tasks</strong>: onboarding tasks you own and can start or finish, requests assigned to you, and resolved requests you raised. Order: overdue (most days first) → blocking other tasks → urgent/high requests → due today or tomorrow → other requests → other tasks → resolved requests to close.</li>
-                  <li><strong className="font-medium text-foreground">Onboarding to chase</strong>: overdue tasks owned by someone else in checklists you oversee (HR: all; managers: their team). Most overdue first. Overdue means the due date has passed in the new hire&apos;s local time.</li>
-                </ul>
-                <p className="mt-2 text-xs">Each record appears once. Ties are broken by title.</p>
-              </details>
-            </div>
-          )}
-        </section>
+      <EquipmentLine insight={insight} />
+    </>
+  );
+}
 
-        <aside aria-label="People context" className="space-y-5">
-          {insight.requests > 0 ? (
-            <section aria-labelledby="insight-h" className="holo-edge rounded-2xl bg-card px-4 py-4">
-              <h2 id="insight-h" className="text-[15px] font-semibold tracking-[-0.02em]">IT equipment for new hires</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {insight.scope === "self" ? (
-                  <>You have {plural(insight.requests, "open IT equipment request")}{insight.requests === 1 ? ", opened" : "; the oldest was opened"} {plural(insight.oldestDays, "day")} ago.</>
-                ) : (
-                  <>
-                    {plural(insight.hires, insight.scope === "team" ? "person in your team" : "person", insight.scope === "team" ? "people in your team" : "people")} who joined in the last 60 days {insight.hires === 1 ? "has" : "have"}{" "}
-                    {plural(insight.requests, "open IT equipment request")}
-                    {insight.requests === 1 ? ", opened" : "; the oldest was opened"} {plural(insight.oldestDays, "day")} ago.
-                  </>
-                )}
-              </p>
-              <Button asChild size="sm" variant="outline" className="mt-3">
-                <Link href={insight.href}>Review requests <ArrowRight aria-hidden /></Link>
-              </Button>
-            </section>
+function Panel({ id, title, meta, action, children }: { id: string; title: string; meta?: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section aria-labelledby={id} className="surface">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-5 py-3">
+        <div className="min-w-0">
+          <h3 id={id} className="text-[15px] font-semibold tracking-[-0.02em]">{title}</h3>
+          {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+const linkCls = "rounded text-xs font-medium text-link hover:underline";
+
+async function Insights({ me, now }: { me: Me; now: Date }) {
+  const hr = isHrAdmin(me);
+  const [active, insight, org, mine, chase] = await Promise.all([
+    listOnboardings(me, { page: 1, pageSize: 100, progress: "active" }),
+    todayInsight(me, now),
+    hr ? orgDashboard(me) : Promise.resolve(null),
+    hr ? Promise.resolve(null) : myDashboard(me),
+    hr ? Promise.resolve(null) : overdueToChase(me, now),
+  ]);
+  const hires = [...active.data].sort((a, b) => b.progress.overdue - a.progress.overdue || b.progress.blocked - a.progress.blocked || a.employee.name.localeCompare(b.employee.name));
+  const overdueList = org ? org.overdueTasks : [];
+  const overdueTotal = org ? org.onboarding.overdueTasks : (mine?.team?.overdueTasks ?? 0);
+  const byCountry = org
+    ? Object.entries(overdueList.reduce<Record<string, number>>((m, t) => ((m[t.countryCode] = (m[t.countryCode] ?? 0) + 1), m), {})).sort((a, b) => b[1] - a[1])
+    : [];
+  const blocked = overdueList.filter((t) => t.state === "BLOCKED").length;
+  const team = org ? "" : " in your team";
+
+  return (
+    <>
+      <h2 className="sr-only">Insights</h2>
+      <div className="grid items-start gap-5 lg:grid-cols-2">
+        <Panel
+          id="overdue-h"
+          title="Overdue onboarding tasks"
+          meta={`Past the due date in the new hire's local time${team}`}
+          action={<Link href="/onboarding/overdue" className={linkCls}>Open list</Link>}
+        >
+          <div className="grid grid-cols-2 gap-px bg-border">
+            <Link href="/onboarding/overdue" className="group bg-card px-5 py-4 transition-colors hover:bg-white/[0.03]">
+              <span className="block text-[13px] font-medium text-muted-foreground group-hover:text-foreground">Overdue</span>
+              <span className={cn("mt-1 block text-[30px] font-semibold leading-none tracking-[-0.04em] tabular-nums", overdueTotal && "text-danger")}>{overdueTotal}</span>
+            </Link>
+            {org ? (
+              <Link href="/onboarding/overdue?state=BLOCKED" className="group bg-card px-5 py-4 transition-colors hover:bg-white/[0.03]">
+                <span className="block text-[13px] font-medium text-muted-foreground group-hover:text-foreground">Of which blocked</span>
+                <span className={cn("mt-1 block text-[30px] font-semibold leading-none tracking-[-0.04em] tabular-nums", blocked && "text-warning")}>{blocked}</span>
+              </Link>
+            ) : (
+              <Link href="/onboarding/overdue?owner=others" className="group bg-card px-5 py-4 transition-colors hover:bg-white/[0.03]">
+                <span className="block text-[13px] font-medium text-muted-foreground group-hover:text-foreground">Owned by others</span>
+                <span className="mt-1 block text-[30px] font-semibold leading-none tracking-[-0.04em] tabular-nums">{chase?.length ?? 0}</span>
+              </Link>
+            )}
+          </div>
+          {byCountry.length ? (
+            <ul aria-label="Overdue tasks by office" className="flex flex-wrap gap-2 border-t px-5 py-3">
+              {byCountry.map(([code, n]) => (
+                <li key={code}>
+                  <Link href={`/onboarding/overdue?countryCode=${code}`} className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs hover:border-primary/60">
+                    {COUNTRY_LABEL[code as keyof typeof COUNTRY_LABEL]} <span className="font-mono tabular-nums text-danger">{n}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           ) : null}
+        </Panel>
 
-          {onboardingRows.length ? (
-            <section aria-labelledby="onb-h" className="surface">
-              <div className="flex items-baseline justify-between border-b px-4 py-3">
-                <h2 id="onb-h" className="text-[15px] font-semibold tracking-[-0.02em]">{me.role === "EMPLOYEE" ? "My onboarding" : "Onboarding now"}</h2>
-                <Link href="/onboarding?progress=active" className="rounded text-xs font-medium text-link hover:underline">All</Link>
-              </div>
-              <ul className="divide-y">
-                {onboardingRows.slice(0, 6).map((o) => (
-                  <li key={o.id}>
-                    <Link href={`/onboarding/${o.id}`} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-white/[0.03]">
+        <Panel
+          id="equip-h"
+          title="IT equipment for new hires"
+          meta={`Open IT equipment requests from people${team} who joined in the last 60 days`}
+          action={insight.requests ? <Link href={insight.href} className={linkCls}>Review requests</Link> : undefined}
+        >
+          <div className="grid grid-cols-2 gap-px bg-border">
+            <div className="bg-card px-5 py-4">
+              <span className="block text-[13px] font-medium text-muted-foreground">New hires waiting</span>
+              <span className="mt-1 block text-[30px] font-semibold leading-none tracking-[-0.04em] tabular-nums">{insight.hires}</span>
+            </div>
+            <Link href={insight.href} className="group bg-card px-5 py-4 transition-colors hover:bg-white/[0.03]">
+              <span className="block text-[13px] font-medium text-muted-foreground group-hover:text-foreground">Open requests</span>
+              <span className={cn("mt-1 block text-[30px] font-semibold leading-none tracking-[-0.04em] tabular-nums", insight.requests && "text-warning")}>{insight.requests}</span>
+            </Link>
+          </div>
+          <p className="border-t px-5 py-3 text-xs text-muted-foreground">
+            {insight.requests ? `Oldest opened ${plural(insight.oldestDays, "day")} ago.` : "No new hire is waiting on IT equipment."}
+          </p>
+        </Panel>
+
+        <div className="lg:col-span-2">
+          <Panel
+            id="onb-h"
+            title="Onboarding progress"
+            meta={`${plural(hires.length, "checklist")} in progress${team} · most overdue first`}
+            action={<Link href="/onboarding?progress=active" className={linkCls}>All in progress</Link>}
+          >
+            {hires.length ? (
+              <ul className="grid divide-y sm:grid-cols-2 sm:divide-y-0">
+                {hires.slice(0, 8).map((o) => (
+                  <li key={o.id} className="sm:border-b">
+                    <Link href={`/onboarding/${o.id}`} className="flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-white/[0.03]">
                       <ProgressRing value={o.progress.completed} total={o.progress.total} size={32} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{o.employee.name}</span>
@@ -253,19 +331,14 @@ async function Today({ me, showAll, now }: { me: Me; showAll: boolean; now: Date
                   </li>
                 ))}
               </ul>
-            </section>
-          ) : null}
-
-          {hr || mgr ? (
-            <p className="text-xs text-muted-foreground">
-              Request charts and headcount are further down, under{" "}
-              <Link href="#at-a-glance" className="rounded font-medium text-link hover:underline">At a glance</Link>.
-            </p>
-          ) : null}
-        </aside>
+            ) : (
+              <p className="px-5 py-6 text-center text-sm text-muted-foreground">No checklist is in progress.</p>
+            )}
+          </Panel>
+        </div>
       </div>
 
-      {hr && org ? <OrgAtAGlance d={org} /> : mgr && mine ? <ManagerAtAGlance d={mine} /> : null}
+      {org ? <OrgAtAGlance d={org} /> : mine ? <ManagerAtAGlance d={mine} /> : null}
     </>
   );
 }

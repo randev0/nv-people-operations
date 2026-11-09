@@ -129,7 +129,7 @@ test("U01: key screens fit a 390px viewport without horizontal scrolling", async
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await ctx.newPage();
   await signIn(page, "hr.admin@example.com");
-  for (const path of ["/dashboard", "/dashboard?queue=all", "/onboarding/overdue", "/requests?scope=all", "/my-work", "/onboarding", "/employees", "/templates", "/requests/new"]) {
+  for (const path of ["/dashboard", "/dashboard?tab=insights", "/dashboard?list=followups", "/onboarding/overdue", "/requests?scope=all", "/my-work", "/onboarding", "/employees", "/templates", "/requests/new"]) {
     await page.goto(path);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, path).toBeLessThanOrEqual(0);

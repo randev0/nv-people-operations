@@ -40,6 +40,8 @@ export function AssignSheet({ requestId, title, open, onOpenChange, onAssigned }
   const [req, setReq] = useState<RequestDTO | null>(null);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Bumped after a refused (stale) submission so the sheet shows the request as it is now. */
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -54,7 +56,7 @@ export function AssignSheet({ requestId, title, open, onOpenChange, onAssigned }
     return () => {
       live = false;
     };
-  }, [open, requestId]);
+  }, [open, requestId, reload]);
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -97,13 +99,22 @@ export function AssignSheet({ requestId, title, open, onOpenChange, onAssigned }
                     Open the full record <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                   </Link>
                 </div>
+                {reload > 0 ? (
+                  <p role="alert" className="rounded-xl border border-warning/35 bg-warning/10 px-3 py-2 text-sm">
+                    {req.status === "SUBMITTED"
+                      ? "This request changed while it was open. The latest version is shown; choose the assignee again."
+                      : `Someone else already handled this request: it is now ${req.status.toLowerCase().replace("_", " ")}${req.assignee ? ` (assigned to ${req.assignee.name})` : ""}. Close this panel to see the updated list.`}
+                  </p>
+                ) : null}
                 <AssignmentPanel
+                  key={`${req.id}:${req.version}`}
                   request={{
                     id: req.id, version: req.version, status: req.status, allowedActions: req.allowedActions,
                     assignee: req.assignee, categoryId: req.category.id, priority: req.priority,
                   }}
                   suggestion={suggestion}
                   onAssigned={(name) => onAssigned(`“${req.title}” assigned to ${name}. Your list has been updated.`)}
+                  onConflict={() => setReload((n) => n + 1)}
                 />
               </>
             )}

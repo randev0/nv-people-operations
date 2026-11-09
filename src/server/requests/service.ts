@@ -60,7 +60,12 @@ export async function listRequests(actor: Actor, q: ListRequestsQuery) {
   }
   const where = { AND: filters };
   const [rows, total] = await db.$transaction([
-    db.serviceRequest.findMany({ where, include: requestInclude, orderBy: [{ createdAt: "desc" }, { id: "desc" }], ...skipTake(q) }),
+    db.serviceRequest.findMany({
+      where,
+      include: requestInclude,
+      orderBy: q.sort === "priority" ? [{ priority: "desc" }, { createdAt: "asc" }, { id: "asc" }] : [{ createdAt: "desc" }, { id: "desc" }],
+      ...skipTake(q),
+    }),
     db.serviceRequest.count({ where }),
   ]);
   return { data: rows.map((r) => dto(actor, r)), meta: { page: q.page, pageSize: q.pageSize, total } };

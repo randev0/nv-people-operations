@@ -86,7 +86,7 @@ test("keyboard only: dialog traps focus and Escape returns focus to the trigger"
 const PAGES: { who: string; paths: string[] }[] = [
   { who: "employee.my@example.com", paths: ["/dashboard", "/requests", "/requests/new", "/my-work", "/onboarding"] },
   { who: "manager.my@example.com", paths: ["/dashboard", "/requests?scope=team", "/onboarding", "/employees"] },
-  { who: "hr.admin@example.com", paths: ["/dashboard", "/dashboard?queue=all", "/onboarding/overdue", "/requests?scope=all", "/templates", "/onboarding/assign", "/employees"] },
+  { who: "hr.admin@example.com", paths: ["/dashboard", "/dashboard?tab=insights", "/dashboard?list=followups", "/onboarding/overdue", "/requests?scope=all", "/templates", "/onboarding/assign", "/employees"] },
   { who: "it.owner@example.com", paths: ["/my-work", "/my-work?kind=request"] },
 ];
 

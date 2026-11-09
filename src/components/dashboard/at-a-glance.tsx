@@ -37,7 +37,7 @@ export function OrgAtAGlance({ d }: { d: OrgDashboard }) {
   return (
     <section aria-labelledby="glance-h" id="at-a-glance" className="mt-10 scroll-mt-6">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="glance-h" className="text-lg font-semibold tracking-[-0.02em]">At a glance</h2>
+        <h2 id="glance-h" className="text-lg font-semibold tracking-[-0.02em]">Requests and headcount</h2>
         <p className="text-xs text-muted-foreground">
           Live data as of <span className="font-mono">{formatInstant(d.asOf)}</span>
         </p>

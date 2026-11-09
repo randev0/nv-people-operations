@@ -37,6 +37,8 @@ export const listRequestsQuery = z
     insight: z.enum(["new-hires-it"]).optional(),
     /** Resolved within the rolling 7 days ending now (the dashboard's "resolved, last 7 days"). */
     resolved: z.enum(["last-7-days"]).optional(),
+    /** priority = Urgent → Low, then oldest first (the dashboard's assignment order). */
+    sort: z.enum(["newest", "priority"]).optional(),
   })
   .strict();
 
