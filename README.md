@@ -11,7 +11,9 @@ Design and rules: **[ARCHITECTURE.md](ARCHITECTURE.md)**. API: [docs/API_CONTRAC
 
 ## Live URL
 
-**Not deployed yet.** Deployment needs a hosting account, an isolated PostgreSQL database and an Anthropic API key, and none have been provided. See [Deployment](#deployment). Everything below was verified locally.
+**https://peopleops.77-42-88-180.sslip.io** — deployed 2026-11-09 on a VPS (systemd + nginx + Let's Encrypt, isolated PostgreSQL). Source: https://github.com/randev0/nv-people-operations.
+
+The AI router is deployed but **not yet enabled on the live site** (no Anthropic API key configured yet); it shows "AI suggestions are not configured" and manual submission works. See [deploy/DEPLOY.md](deploy/DEPLOY.md).
 
 ## Demo accounts
 
@@ -80,14 +82,9 @@ Latest local results (2026-11-09): lint 0 problems, typecheck 0 errors, unit 24/
 
 ## Deployment
 
-The target shape is one Node.js host running `npm run build && npm start`, plus an isolated managed PostgreSQL, with HTTPS and secrets in the host's environment settings.
+Production runs on a shared VPS: Next.js standalone build under systemd as an unprivileged user, a dedicated PostgreSQL container bound to localhost, and nginx with a Let's Encrypt certificate. The full runbook (build, ship, migrate, seed once, rollback, enabling AI) is in **[deploy/DEPLOY.md](deploy/DEPLOY.md)**.
 
-1. Create an empty PostgreSQL database and set `DATABASE_URL`, `SESSION_SECRET`, `APP_URL` (the exact https origin), `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` and `DEMO_PASSWORD` on the host.
-2. `npm ci && npm run db:migrate && npm run build`, then start with `npm start`.
-3. Run once: `ALLOW_ASSESSMENT_SEED=true npm run db:seed && npm run db:verify-seed`. Then turn the flag off. The app never seeds on boot.
-4. Smoke test from a fresh browser: `/api/health`, each demo login, one request flow, one task flow, the dashboard and a real AI suggestion.
-
-**Current blocker:** no hosting account, hosted database, GitHub destination or Anthropic key has been provided, so steps 1–4 haven't been run. The live-platform checks (P01–P02) and the live AI check (AI01) are marked BLOCKED in `docs/ACCEPTANCE.md`.
+Generic steps for any Node host: set the environment variables above, `npm ci && npm run db:migrate && npm run build`, start with `npm start`, run the seed once with `ALLOW_ASSESSMENT_SEED=true`, then smoke test `/api/health`, each demo login, a request flow, a task flow, the dashboard and an AI suggestion.
 
 ## Reuse disclosure
 

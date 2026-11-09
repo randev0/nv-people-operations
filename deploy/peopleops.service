@@ -1,0 +1,25 @@
+# /etc/systemd/system/peopleops.service — as installed on the VPS (2026-11-09)
+[Unit]
+Description=People Operations HRIS (Next Ventures assessment)
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=peopleops
+Group=peopleops
+WorkingDirectory=/opt/peopleops/current/app
+EnvironmentFile=/etc/peopleops/peopleops.env
+ExecStart=/usr/bin/node /opt/peopleops/current/app/server.js
+Restart=always
+RestartSec=5
+MemoryMax=512M
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=peopleops
+
+[Install]
+WantedBy=multi-user.target

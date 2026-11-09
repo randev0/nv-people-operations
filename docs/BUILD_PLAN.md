@@ -10,7 +10,7 @@ Deadline/timezone from the invitation: **not yet supplied** (working timezone As
 | 3 Onboarding | Template editor + DAG; employees; assignment snapshots; My Work; dates/progress | HR creates+assigns template; owners execute; dependency/timezone tests pass | Done (O01–O12 PASS) |
 | 4 Dashboard + AI | Aggregates, chart, cross-module insight; AI router UI | Dashboard reconciles with data; real LLM returns valid suggestion; failures keep manual submit | Dashboard + fallbacks done; **real LLM blocked (no key)** |
 | 5 Seed + integration | 100 employees, 40 requests, 8 onboardings; e2e; responsive polish | Seed verify + idempotency; e2e scenarios pass | Done locally (22/22, e2e 5/5) |
-| 6 Deployment | Host + isolated DB; migrate; seed once; smoke tests | Public URL works per role; AI live; persistence | **Blocked** — see below |
+| 6 Deployment | Host + isolated DB; migrate; seed once; smoke tests | Public URL works per role; AI live; persistence | Done 2026-11-09 except live AI (no key) |
 | 7 Submission | Reconcile docs; DEBUG_LOG; README; limitations | Checklist complete or gaps disclosed | Local docs reconciled; final audit after deployment |
 
 ## Blockers
@@ -19,4 +19,4 @@ Deadline/timezone from the invitation: **not yet supplied** (working timezone As
 | --- | --- | --- |
 | ~~npm registry blocked by session egress policy~~ | Resolved 2026-11-09 (candidate enabled network access) | — |
 | No Anthropic API key / model id | Live AI acceptance (AI01, P-phase) cannot pass | Key + model id set on host only |
-| No hosting target, isolated Postgres, GitHub repo | Phase 6 cannot run | Choice of host/DB in candidate's accounts; new empty repo URL |
+| ~~No hosting target / DB / repo~~ | Resolved: VPS 77.42.88.180, isolated Postgres container, GitHub randev0/nv-people-operations (private) | — |

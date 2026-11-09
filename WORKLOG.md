@@ -27,3 +27,10 @@
   - Low: assignee/owner `loginEnabled` was checked outside the write transaction. Fixed: re-checked under `SELECT … FOR SHARE` inside the transaction (requests assign, onboarding assignment).
   - Low: dashboard 60-day "new hire" window used the UTC date and had no upper bound. Fixed: exact 0–60 days computed with `todayIn(country timezone)`.
   - Low, not fixed (documented limitation): two concurrent HR edits of reporting lines can each pass the cycle check (no row locking across users).
+
+## 2026-11-09 — deployment
+- GitHub: created private repo `randev0/nv-people-operations` through the candidate's signed-in browser session; added a repo-scoped write deploy key (candidate approved; GitHub sudo confirmed by candidate). Pushed `main`.
+- VPS 77.42.88.180 (Ubuntu 24.04, shared: nginx on 80/443 with many vhosts, MySQL, several Docker apps, 3.7 GB RAM with swap ~95% used, disk 87%). Candidate added the session's SSH public key for root. Decisions: build off-box (memory), dedicated `peopleops-postgres` container on 127.0.0.1:5442 using the already-present postgres:16-alpine image, app on 127.0.0.1:3310 under systemd as user `peopleops`, new nginx vhost only (`nginx -t` before reload), hostname `peopleops.77-42-88-180.sslip.io` (no DNS changes needed), certbot `--nginx` for TLS.
+- Added `output: "standalone"` behind `BUILD_STANDALONE=1`. Standalone smoke test locally: first `/api/health` returned 503 — the cloud workspace's local PostgreSQL had stopped (`Can't reach database server at 127.0.0.1:5432`); restarted it, then health ok and login 200. Environment issue, not app.
+- nginx sets `X-Forwarded-For $remote_addr` (overwrite) so the throttle's client IP cannot be spoofed through the proxy.
+- Live checks recorded in docs/ACCEPTANCE.md (P01, P02, D01 hosted). Smoke-test side effects on the live data: one closed request titled "Deployment smoke test"; Farzana Rahman's "Complete 30-day manager check-in" completed by its owner.
