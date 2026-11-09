@@ -102,7 +102,7 @@ The three entries above remain the required write-ups. These two were found late
 
 ### Bug 4 — Dashboard metric cards opened lists that did not contain the records behind their numbers
 
-**Affected commit/date:** `bc3089f` (card links) and earlier (`e654398` for "Open requests"), found 2026-11-09.
+**Affected commit/date:** "Open requests" link since `07ae6e8`; "Resolved this week" link since `bc3089f`; found 2026-11-09.
 
 **Symptom:** the HR card "Open requests 24" opened `/requests?scope=all`, which listed **40** requests (every status). The card "Resolved this week 8" opened `/requests?scope=all&status=RESOLVED`, which also showed 8 rows, but not the same 8.
 
@@ -121,7 +121,7 @@ The three entries above remain the required write-ups. These two were found late
 
 ### Bug 5 — "Use as assignee" on the AI suggestion could fail with a false "not eligible" error
 
-**Affected commit/date:** since the assigner suggestion panel (`4a1136a`), found 2026-11-09 when an e2e run failed.
+**Affected commit/date:** since the assigner suggestion panel (`3d6304d`), found 2026-11-09 when an e2e run failed.
 
 **Symptom:** `flows.spec.ts` failed at `expect(getByLabel("Assign to")).not.toHaveValue("")`. The trace showed the select still disabled ("Loading people…") when the manager clicked "Use Priya Ismail as assignee"; afterwards the select stayed empty.
 
