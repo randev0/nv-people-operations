@@ -178,3 +178,8 @@
 - Login: the hero is now product-led: "Requests answered. / New hires ready.", one sentence on what the workspace does, and three feature rows (service requests with AI-suggested assignees, onboarding checklists with local-time deadlines, one view of the day). The dotted office map was dropped from the hero to keep it calm; the four office cities stay in the footer. Sign-in subtitle: "Use your work email to continue."
 - Sidebar subtitle "Next Ventures" → "HR workspace"; page meta description and a stylesheet comment no longer name the company. Everything else unchanged. Repository docs still name the assessment's company where they describe the brief.
 - e2e 21/21 (axe 0 violations).
+
+## 2026-11-10 — Illustrated sign-in page
+- Request: a sign-in page in the style of a reference shot (illustrated colour panel on the left, quiet form on the right). Built in that style without copying the reference artwork: an original inline SVG (src/components/auth/welcome-illustration.tsx) of a new hire sitting cross-legged with a laptop, a ticked checklist, a plant, a mug and geometric confetti, ink on a warm `--sun` panel. Decorative (aria-hidden).
+- Form side keeps the dark canvas: serif heading "Welcome back!" / "Sign in to your workspace" (DM Serif Display, OFL, added to THIRD_PARTY_NOTICES), pill inputs, a show/hide password button (aria-pressed, labelled "Show characters" so it does not collide with the Password field's label), a pill Sign in button and an honest note instead of a fake reset link ("Forgot your password? Ask your HR admin to reset it."; there is no self-service reset). Demo accounts stay in their disclosure. On phones the panel becomes a short banner above the form.
+- e2e 21/21, axe 0 violations.

@@ -40,6 +40,7 @@
     --radius: 0.875rem;
 
     /* Psychedelic signature palette */
+    --sun: 44 95% 62%;                /* sign-in illustration panel */
     --trip-1: 350 85% 55%;
     --trip-2: 318 90% 60%;
     --trip-3: 268 90% 66%;

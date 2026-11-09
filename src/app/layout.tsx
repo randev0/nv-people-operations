@@ -4,6 +4,7 @@ import "@fontsource/poppins/latin-500.css";
 import "@fontsource/poppins/latin-600.css";
 import "@fontsource/poppins/latin-700.css";
 import "@fontsource/martian-mono/latin-400.css";
+import "@fontsource/dm-serif-display/latin-400.css";
 import "@fontsource/martian-mono/latin-500.css";
 import "./globals.css";
 
