@@ -18,7 +18,7 @@ async function signOut(page: Page) {
 test("request lifecycle with AI routing (draft suggestion + assigner suggestion) across employee, manager, IT owner", async ({ page }) => {
   const title = `E2E monitor flicker ${Date.now()}`;
   await signIn(page, "employee.my@example.com");
-  await page.getByRole("link", { name: "Requests", exact: true }).click();
+  await page.getByRole("complementary", { name: "Main navigation" }).getByRole("link", { name: "Requests", exact: true }).click();
   await page.getByRole("link", { name: "New request" }).click();
   await page.getByLabel("Title").fill(title);
   await page.getByLabel("Description").fill("My external monitor flickers every few seconds since this morning.");
@@ -129,7 +129,7 @@ test("U01: key screens fit a 390px viewport without horizontal scrolling", async
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await ctx.newPage();
   await signIn(page, "hr.admin@example.com");
-  for (const path of ["/dashboard", "/requests?scope=all", "/my-work", "/onboarding", "/employees", "/templates", "/requests/new"]) {
+  for (const path of ["/dashboard", "/dashboard?tab=insights", "/dashboard?queue=all", "/requests?scope=all", "/my-work", "/onboarding", "/employees", "/templates", "/requests/new"]) {
     await page.goto(path);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, path).toBeLessThanOrEqual(0);

@@ -441,7 +441,7 @@ Full request and response types (DTOs) are in **[docs/API_CONTRACT.md](docs/API_
 
 | Method | Path | Request → Response | Who |
 | --- | --- | --- | --- |
-| GET | /requests | `scope=mine\|assigned\|team\|all, status (incl. OPEN), categoryId, priority, countryCode, q, page, insight=new-hires-it, resolved=last-7-days` → RequestDTO[] (each with `allowedActions`) | `team`: Manager/HR · `all`, `insight`: HR |
+| GET | /requests | `scope=mine\|assigned\|team\|all, status (incl. OPEN), categoryId, priority, countryCode, q, page, insight=new-hires-it, resolved=last-7-days` → RequestDTO[] (each with `allowedActions`) | `team`: Manager/HR · `all`: HR · `insight`: HR (any scope) or Manager (within their scope) |
 | POST | /requests | `{title,description,categoryId,priority}` → RequestDTO (201); triggers the AI suggestion in the background | Signed in (requester = self) |
 | GET | /requests/:id | → RequestDTO | Read scope |
 | GET / POST | /requests/:id/comments | `{body}` → CommentDTO[] / CommentDTO | Read scope |
@@ -472,6 +472,11 @@ Full request and response types (DTOs) are in **[docs/API_CONTRACT.md](docs/API_
 | GET | /dashboard | → headcount by country, open requests by status/category, active hires, overdue tasks, cross-module insight, `asOf` | HR |
 | GET | /dashboard/mine | → personal counts (+ team counts for a manager) | Signed in |
 
+The dashboard page has two tabs. **Today** (default, `/dashboard`) shows a compact greeting, the top three items of the viewer's work queue (`/dashboard?queue=all` for the rest) and one scoped cross-module line. **Insights** (`/dashboard?tab=insights`) holds all reporting: the HR view above, or personal/team counts for other roles.
+
+The work queue (`src/server/dashboard/work-queue.ts`) only contains work the viewer can act on, each record once:
+own onboarding tasks they can start or complete (blocked tasks are excluded), requests assigned to them that they can start or resolve, submitted requests they may assign (`canAssignRequest`), and resolved requests they raised (to close). Order, first matching rule wins: 1 overdue own task (most days overdue, then most tasks blocked) · 2 own task blocking other tasks (most blocked, then earliest due) · 3 urgent/high request (urgent first, then oldest) · 4 own task due today or tomorrow · 5 other request (oldest) · 6 other own task (earliest due) · 7 resolved request to confirm (longest resolved). Ties break on title, then id. Each row names its rule, the person affected, one reason line and one action; actions use the existing transition endpoints, then the list refreshes and a confirmation is announced.
+
 **AI**
 
 | Method | Path | Request → Response | Who |
@@ -500,7 +505,8 @@ Full request and response types (DTOs) are in **[docs/API_CONTRACT.md](docs/API_
 | Work an onboarding task | only tasks I own (via My Work) | same | same |
 | Templates · assign checklists · manage employees | — | — | ✔ |
 | Employee list | — | self + direct reports (read-only) | all |
-| Dashboard | personal | personal + team | organisation-wide |
+| Dashboard: Today work queue | own tasks; own resolved requests to close | + team requests to assign | + all requests to assign |
+| Dashboard: Insights | personal | personal + team | organisation-wide |
 | AI suggestions | while drafting; team/category on own requests | + suggested person on requests I can assign | same, all open requests |
 
 ### 4.2 How it is enforced
@@ -684,7 +690,7 @@ Each decision is written as a short Architecture Decision Record: **context → 
 | **Observability** | One-line JSON logs with a request ID on every error response; journald via systemd; `/api/health` for uptime checks |
 | **Performance and scale** | Indexes per query (§2.2); pagination everywhere (max 100); at ~100 users the overdue/blocked derivation is in-memory per owner — see ADR-5 for scaling |
 | **Accessibility and UX** | Labelled inputs, visible focus, skip link, keyboard-usable controls and dialogs (focus trapped, Escape returns focus), status shown as text (not colour alone), charts paired with value tables; automated axe WCAG 2.1 A/AA scan of 15 pages with zero violations; verified at 390 px with no horizontal scroll |
-| **Testing** | 36 unit (office clocks/DST and office hours, pure policy, state, dates, DAG, deadline labels, AI validation and providers) · 27 integration (HTTP against a fresh database per run: concurrency, negative access, AI failure/invalid/timeout paths via a fake AI bridge) · 12 Playwright end-to-end (core flows, filter persistence across detail and back, equipment-queue drill-down, dashboard numbers equal the lists they open, overdue tasks in the first screen, office-pin labels on focus, keyboard-only use, dialog focus trap, axe WCAG 2.1 AA scan of 15 pages, 390 px layout) · seed verification (22 checks). Evidence in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
+| **Testing** | 36 unit (office clocks/DST and office hours, pure policy, state, dates, DAG, deadline labels, AI validation and providers) · 27 integration (HTTP against a fresh database per run: concurrency, negative access, AI failure/invalid/timeout paths via a fake AI bridge) · 17 Playwright end-to-end (Today queue order, View all, action feedback, caught-up state, keyboard tabs and office times, core flows, filter persistence across detail and back, equipment-queue drill-down, dashboard numbers equal the lists they open, overdue tasks in the first screen, office-pin labels on focus, keyboard-only use, dialog focus trap, axe WCAG 2.1 AA scan of 19 pages, 390 px layout) · seed verification (22 checks). Evidence in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
 
 ---
 

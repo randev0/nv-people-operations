@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "../db";
 import { forbidden } from "../errors";
-import { canViewOrgDashboard, isManager, type Actor } from "../auth/permissions";
+import { canViewOrgDashboard, isHrAdmin, isManager, type Actor } from "../auth/permissions";
 import { COUNTRY_TIMEZONES, addCalendarDays, daysBetween, formatDateOnly, isOverdue, todayIn } from "../onboarding/dates";
 
 const OPEN_STATUSES = ["SUBMITTED", "ASSIGNED", "IN_PROGRESS"] as const;
@@ -29,7 +29,7 @@ export async function newHiresWithOpenItRequests(asOf: Date = new Date()) {
       requestsSubmitted: { some: { status: { in: [...OPEN_STATUSES] }, category: { code: "IT_EQUIPMENT" } } },
     },
     select: {
-      id: true, name: true, countryCode: true, joiningDate: true,
+      id: true, name: true, countryCode: true, joiningDate: true, managerId: true,
       requestsSubmitted: {
         where: { status: { in: [...OPEN_STATUSES] }, category: { code: "IT_EQUIPMENT" } },
         select: { id: true, number: true, title: true, status: true, createdAt: true },
@@ -245,3 +245,25 @@ export async function myDashboard(actor: Actor) {
 }
 
 export type MyDashboard = Awaited<ReturnType<typeof myDashboard>>;
+
+/**
+ * Today's compact cross-module line, scoped to what the viewer may see and open:
+ * HR = organisation, managers = their direct reports, employees = themselves.
+ * Same definition as the Insights tab and the request-list filter behind it. Wording
+ * says "open IT equipment requests" only: an open request does not by itself mean
+ * onboarding is blocked.
+ */
+export async function todayInsight(actor: Actor, asOf: Date = new Date()) {
+  const all = await newHiresWithOpenItRequests(asOf);
+  const scope = isHrAdmin(actor) ? "org" : isManager(actor) ? "team" : "self";
+  const rows = scope === "org" ? all : scope === "team" ? all.filter((u) => u.managerId === actor.id) : all.filter((u) => u.id === actor.id);
+  const requests = rows.flatMap((u) => u.requestsSubmitted);
+  const oldest = requests.length ? Math.max(...requests.map((r) => Math.floor((asOf.getTime() - r.createdAt.getTime()) / DAY))) : 0;
+  return {
+    scope,
+    hires: rows.length,
+    requests: requests.length,
+    oldestDays: oldest,
+    href: scope === "org" ? "/requests?scope=all&insight=new-hires-it" : scope === "team" ? "/requests?scope=team&insight=new-hires-it" : "/requests?scope=mine&status=OPEN",
+  } as const;
+}

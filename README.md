@@ -4,7 +4,7 @@ An HRIS module for Next Ventures, built for the HRIS Systems Developer assessmen
 
 - **Service requests**: IT equipment, software access, HR queries, facilities and other requests. Each moves through Submitted → Assigned → In progress → Resolved → Closed, with comments and an append-only history.
 - **Onboarding**: HR builds checklist templates with team-owned tasks, calendar deadlines and prerequisites, then assigns one to a new hire with an owner for every task. Owners work their tasks from **My Work**. Blocked and overdue states are derived, not stored.
-- **Dashboard**: an HR view with headcount, open requests by status and category (bar charts with text values), active onboardings, overdue tasks, and one cross-module insight: new hires still waiting on IT equipment. Everyone else gets a personal dashboard; managers also see their team.
+- **Dashboard**: two tabs. **Today** (default) is a short, prioritised list of what *you* can act on now (top three, "View all" for the rest) plus one line about new hires' open IT equipment requests. **Insights** has the reporting: for HR, headcount by country, open requests by status and category (bar charts with text values), onboarding progress, overdue totals and the cross-module insight, each linked to the filtered records; managers and employees see their own and team figures.
 - **AI request router** (the AI feature): suggests a category, priority, team and optionally a person for a draft request. The suggestion is advisory only. It never submits, assigns or approves anything, and manual submission works when AI is unavailable.
 
 Design and rules: **[ARCHITECTURE.md](ARCHITECTURE.md)**. API: [docs/API_CONTRACT.md](docs/API_CONTRACT.md). Permissions: [docs/PERMISSIONS.md](docs/PERMISSIONS.md). Test evidence: [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md). Bugs: [DEBUG_LOG.md](DEBUG_LOG.md).
@@ -35,7 +35,7 @@ A second HR admin, `hr.ops@example.com`, also exists.
 2. **manager.my**: Requests → *My team* tab. Open the new request and assign it to an IT person (for example Priya Ismail, it.owner). Try a request ID from another team: you get 404.
 3. **it.owner**: My Work → complete **Create company account**. *Hand over laptop* becomes startable straight away. Assigned requests → start, comment, resolve.
 4. **employee.my**: close the resolved request.
-5. **hr.admin**: Dashboard (most overdue onboarding tasks with a link to each task; "New hires waiting on IT equipment" lists the requests longest-waiting first, and its button opens exactly those records; every metric card opens the list behind its number) → Templates → New template (try a prerequisite loop to see the warning) → Onboarding → Assign checklist (deadlines are calculated per task, and each task needs an owner) → Employees (create, edit, disable login).
+5. **hr.admin**: Dashboard → Today (requests waiting for assignment, most urgent first) → Insights (most overdue onboarding tasks with a link to each task; "New hires waiting on IT equipment" lists the requests longest-waiting first, and its button opens exactly those records; every metric card opens the list behind its number) → Templates → New template (try a prerequisite loop to see the warning) → Onboarding → Assign checklist (deadlines are calculated per task, and each task needs an owner) → Employees (create, edit, disable login).
 
 ## Local setup
 
@@ -79,7 +79,7 @@ The seed is idempotent. It only creates missing fixture rows (deterministic IDs 
 | `npm run test:e2e` | Same harness with Playwright: full request lifecycle with AI routing, task unblocking, template editor, role navigation, keyboard-only use, axe accessibility scan, 390 px layout, filter persistence and the dashboard insight drill-down |
 | `npm run db:generate` / `db:migrate` / `db:seed` / `db:verify-seed` | Prisma client, `migrate deploy`, seed, seed assertions |
 
-Latest local results (2026-11-09): lint 0 problems, typecheck 0 errors, unit 36/36, integration 27/27, e2e 12/12 (including keyboard-only and axe WCAG 2.1 AA scans), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
+Latest local results (2026-11-09): lint 0 problems, typecheck 0 errors, unit 36/36, integration 27/27, e2e 17/17 (including keyboard-only and axe WCAG 2.1 AA scans), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 
 ## Deployment
 

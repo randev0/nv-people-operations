@@ -33,3 +33,8 @@ All checks live in `src/server/auth/permissions.ts` and are applied by domain se
 - **Employees:** `GET /employees/:id` allowed for self, direct manager, HR; otherwise 404.
 - **Precedence:** authentication (401) → read scope (404) → action permission (403) → state/domain rules (422) → version (409).
 - **Session integrity:** role is read from the database each request; disabled or session-version-mismatched accounts are rejected with 401.
+
+## Dashboard (2026-11-09)
+
+- **Today work queue** (`src/server/dashboard/work-queue.ts`) is built only from records the viewer can act on, using the shared predicates: task `allowedActions` (owner only), `allowedActionsFor` for requests (START/RESOLVE assignee only; CLOSE requester), and `canAssignRequest` for submitted requests (HR: all; manager: direct reports' requests, never their own). Actions call the existing endpoints, which re-check permissions.
+- **Equipment insight filter** `insight=new-hires-it` on `GET /requests`: HR in any scope; managers too, but the list's read scope and list scope still apply, so a manager only gets their team's requests. Employees: 403.

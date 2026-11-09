@@ -8,6 +8,7 @@ import {
   canReadRequest,
   canTransitionRequest,
   isHrAdmin,
+  isManager,
   requestListScopeWhere,
   requestReadScopeWhere,
 } from "../auth/permissions";
@@ -40,7 +41,9 @@ export async function listRequests(actor: Actor, q: ListRequestsQuery) {
   if (q.priority) filters.push({ priority: q.priority });
   if (q.countryCode) filters.push({ requester: { countryCode: q.countryCode } });
   if (q.insight === "new-hires-it") {
-    if (!isHrAdmin(actor)) throw forbidden("This view is available to HR admins.");
+    // HR: organisation; managers: their team (the scope filter above still applies, so
+    // a manager only ever sees requests inside their read and list scope).
+    if (!isHrAdmin(actor) && !isManager(actor)) throw forbidden("This view is available to HR admins and managers.");
     const { newHiresWithOpenItRequests } = await import("../dashboard/service");
     const ids = (await newHiresWithOpenItRequests()).flatMap((u) => u.requestsSubmitted.map((r) => r.id));
     filters.push({ id: { in: ids } });

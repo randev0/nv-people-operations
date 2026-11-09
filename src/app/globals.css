@@ -132,7 +132,7 @@
 
   /* Iridescent fill for progress and data bars */
   .iridescent {
-    background: linear-gradient(90deg, hsl(var(--trip-1)), hsl(var(--trip-2)) 35%, hsl(var(--trip-3)) 65%, hsl(var(--trip-4)));
+    background: linear-gradient(90deg, hsl(var(--trip-3)), hsl(262 85% 72%) 45%, hsl(var(--trip-4)));
     background-size: 200% 100%;
     animation: iri-flow 6s ease-in-out infinite alternate;
   }
