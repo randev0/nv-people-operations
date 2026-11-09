@@ -1,4 +1,4 @@
-# /etc/systemd/system/peopleops-ai.service — Codex bridge with its own ChatGPT login session
+# /etc/systemd/system/peopleops-ai.service — Codex bridge with its own credentials
 [Unit]
 Description=People Operations AI bridge (Codex CLI, dedicated login)
 After=network.target

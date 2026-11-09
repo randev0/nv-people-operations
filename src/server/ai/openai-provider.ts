@@ -21,7 +21,7 @@ export function extractOutputText(body: ResponsesOutput): string | null {
 
 /**
  * Server-only OpenAI adapter (Responses API, strict JSON-schema structured output).
- * Uses a platform API key (OPENAI_API_KEY) — not a personal ChatGPT login — and the
+ * Uses a platform API key (OPENAI_API_KEY) and the
  * model from OPENAI_MODEL. ~15 s budget: 7 s per attempt, one retry on 429/5xx/timeout.
  */
 export function openaiProvider(fetchImpl: typeof fetch = fetch): RoutingProvider {

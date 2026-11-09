@@ -25,7 +25,7 @@ const unixRequest: Requester = (socketPath, body) =>
 
 /**
  * Talks to the local Codex bridge (deploy/codex-bridge), which runs `codex exec` as a
- * separate unprivileged user with its own ChatGPT login. The app never sees those tokens.
+ * separate unprivileged user with its own credentials. The app never sees them.
  */
 export function codexBridgeProvider(socketPath = process.env.CODEX_BRIDGE_SOCKET || "", request: Requester = unixRequest): RoutingProvider {
   return {
