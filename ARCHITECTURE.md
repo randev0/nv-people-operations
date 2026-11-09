@@ -1,246 +1,738 @@
-# People Operations — Architecture
+# People Operations — System Design
 
-Status: **implemented locally (phases 1–5); not yet deployed**. This document describes the architecture as built; changes from the Phase 0 design are recorded in the decision log at the end. Evidence for every acceptance check is in `docs/ACCEPTANCE.md`.
+| | |
+| --- | --- |
+| **System** | People Operations: service requests + employee onboarding for Next Ventures (≈100 staff, 4 countries) |
+| **Author** | Imran (with Claude as implementation partner) |
+| **Status** | **Implemented and deployed** — https://peopleops.77-42-88-180.sslip.io |
+| **Revision history** | v1 design written and committed before any application code (`75e0644`, 2026-11-09). This is the as-built revision; every change from v1 is in the [decision log](#11-decision-log). |
+| **Companion docs** | [API contract](docs/API_CONTRACT.md) · [Permissions](docs/PERMISSIONS.md) · [Acceptance evidence](docs/ACCEPTANCE.md) · [Deployment runbook](deploy/DEPLOY.md) · [Debug log](DEBUG_LOG.md) |
 
-People Operations is a small HRIS for a single organisation (≈100 people across Bangladesh, Malaysia, Sri Lanka and Cyprus) with two modules on a shared user/authentication base:
+## TL;DR
 
-1. **Service requests** — employees raise IT/software/HR/facilities/other requests that move through a strict lifecycle with comments and history.
-2. **Onboarding** — HR builds dependency-aware checklist templates and assigns them to new hires; each task has an owner, a calendar deadline and prerequisites.
+One Next.js application with one PostgreSQL database. Both workflows sit on **one shared core**: people, roles, reporting lines, departments, authentication and a single permission module.
 
-Plus a role-scoped dashboard and one AI feature: an **advisory request router** that suggests category, priority, team and (optionally) a person for a draft request.
+- **Service Requests** are a strict, audited state machine.
+- **Onboarding** turns reusable templates into per-hire checklists. Tasks have owners, real calendar deadlines and prerequisites.
+- **An HR dashboard** reads both modules, including the cross-module question "which new hires are still waiting on IT equipment?".
+- **The AI feature is an Intelligent Request Router.** It classifies each new request and recommends a team and a person to assign. It is advisory only: it can never assign, approve or change a request. Every recommendation is checked against live database IDs.
 
-## 1. Requirements source and assumptions
+**How to read this document.** Sections are numbered to match the assessment brief:
 
-- Specification: `Claude_HRIS_Build_Pack.md` (kept outside this repository). The assessment PDF (`HRIS_Systems_Developer_Assessment.pdf`) was **not supplied** to the implementation session, so the pack is the working specification. If the PDF is later supplied, its explicit requirements take precedence and differences are recorded in the decision log.
-- Business assumptions (project decisions, not employer requirements):
-  - A manager's team = **direct reports only** (`User.managerId`), never department or country peers.
-  - Assignment by a manager/HR constitutes approval; there is no separate approval state.
-  - Every role can submit its own requests and see its own onboarding. Roles add privileges; department is **not** a role.
-  - An employee assigned a request can read and work **that request** (assignee exception), even if submitted by someone else.
-  - One onboarding checklist per employee (`Onboarding.employeeId` unique). A second assignment returns 409.
-  - Deadlines are calendar days: Day 1 = joining date; Day 7 = joining + 6; Day 30 = joining + 29.
-  - Overdue is a derived flag, not a status; a task can be BLOCKED and overdue at the same time.
-  - No reopening completed tasks or closed requests (MVP limitation).
-  - Template edits apply to future assignments only; assigned checklists are snapshots.
-  - ERACare UI reuse is disclosed in `docs/REUSE_MANIFEST.md`; if reuse is disallowed, copied components are replaced without changing the domain design.
-  - The pack's seed section states two different minimums (Section 1: five threads of 2–4 comments, 5–10 hires with 8–12 tasks; Section 7: eight threads of three comments, eight hires with ten-task template). The seed targets the stricter Section 7 figures, which satisfy both.
+| Brief section | Where to look |
+| --- | --- |
+| 1.1 High-level architecture | [§1](#1-high-level-architecture) — system context, containers, components, deployment, key flows |
+| 1.2 Data model | [§2](#2-data-model) — ERD, data dictionary, how the modules share data, why PostgreSQL |
+| 1.3 API design | [§3](#3-api-design) — every endpoint, grouped by domain |
+| 1.4 Access control | [§4](#4-access-control) — role matrix and how it is enforced |
+| 1.5 State machines | [§5](#5-state-machines) — request and onboarding-task lifecycles |
+| 1.6 Trade-offs | [§6](#6-trade-offs-architecture-decisions) — nine decisions (ADR format) |
 
-## 2. Components
+---
 
-A single deployable **Next.js (App Router, TypeScript)** application:
+## 0. Context and scope
 
-- Server-rendered pages and **route handlers** (`src/app/api/**`) that validate input with **zod** and call **domain services** (`src/server/**`).
-- **PostgreSQL** via **Prisma**. Database access exists only in `src/server/**`.
-- **iron-session** encrypted HttpOnly cookie holding `{userId, sessionVersion}` only; **bcryptjs** password hashes.
-- Selected shadcn/Tailwind components adapted from ERACare (`src/components/ui/**`).
-- A server-only **Anthropic adapter** (`src/server/ai/**`) for routing suggestions. The model comes from `ANTHROPIC_MODEL`; AI is advisory and never authorizes or mutates anything.
+**Problem.** Today requests travel over email and Slack, and onboarding lives in spreadsheets. Requests get lost, and onboarding tasks spread across IT, HR, managers and Compliance get missed or done late.
+
+**Goals**
+- Give every request a tracked lifecycle with clear ownership (who can assign, start, resolve and close).
+- Make onboarding repeatable: HR defines a template once; each hire gets dated tasks with owners and prerequisites; owners see their work across all hires.
+- One login, three roles (Employee, Manager, HR Admin), with data scoped by the server, not just hidden in the UI.
+- One HR view across both modules.
+- An AI feature that removes routine triage work, without weakening access control.
+
+**Non-goals (deliberately out of scope)**
+- Payroll, leave management, performance reviews, attachments, email or notification delivery, password reset, self-service signup, multi-tenant support.
+- Reopening closed requests or completed tasks (see [limitations](#9-risks-and-limitations)).
+- Autonomous AI actions. The AI recommends; a person decides.
+
+**Assumptions** (project decisions where the brief is silent; listed so they can be challenged):
+1. A manager's **team = direct reports** (`User.managerId`), not everyone in the same department or country.
+2. **Assigning a request is the manager's approval.** There is no separate "approved" state.
+3. Every role can submit its own requests and see its own onboarding. A role only adds privileges; **department is not a role**.
+4. Someone assigned a request can read and work **that request**, even if it came from another team (the assignee exception).
+5. One onboarding checklist per employee. Deadlines are calendar days: Day 1 is the joining date, "Week 1" is Day 7, "Day 30" is the joining date + 29.
+6. "Overdue" is a computed flag, not a status, so a task can be Blocked *and* Overdue.
+7. Template edits apply to future assignments only; assigned checklists are snapshots.
+
+---
+
+## 1. High-level architecture
+
+The diagrams follow the [C4 model](https://c4model.com): **context** (who uses the system and what it talks to), **containers** (deployable or runnable pieces), **components** (modules inside the application), then deployment and the key runtime flows.
+
+### 1.1 System context (C4 level 1)
 
 ```mermaid
-flowchart TD
-  UI["Role-aware web UI (RSC + client islands)"] --> API["Next.js route handlers (zod validation, origin check)"]
-  UI -->|server components call services directly| SVC
-  API --> AUTH["Session + current user + central permissions"]
-  AUTH --> SVC["Domain services"]
-  SVC --> SR["Service requests (state machine)"]
-  SVC --> ON["Onboarding (templates, DAG, snapshots, dates)"]
-  SVC --> DASH["People + dashboard queries"]
-  SR --> DB[("PostgreSQL via Prisma")]
-  ON --> DB
-  DASH --> DB
-  SVC --> AI["Server-only AI router"]
-  AI --> LLM["Anthropic Messages API"]
+flowchart LR
+  classDef person fill:#08427b,stroke:#052e56,color:#fff
+  classDef system fill:#1168bd,stroke:#0b4884,color:#fff
+  classDef ext fill:#999,stroke:#6b6b6b,color:#fff
+
+  emp["👤 Employee<br/><small>submits requests, follows own onboarding,<br/>works tasks/requests assigned to them</small>"]:::person
+  mgr["👤 Manager<br/><small>assigns team requests,<br/>monitors direct reports' onboarding</small>"]:::person
+  hr["👤 HR Admin<br/><small>sees everything, manages templates,<br/>employees and the HR dashboard</small>"]:::person
+
+  sys["People Operations<br/><small>Service Requests + Onboarding<br/>on a shared people & access core</small>"]:::system
+  llm["LLM provider<br/><small>GPT-6.1 Sol via Codex CLI (deployed)<br/>OpenAI / Anthropic API (configurable)</small>"]:::ext
+
+  emp -- "HTTPS (browser)" --> sys
+  mgr -- "HTTPS (browser)" --> sys
+  hr -- "HTTPS (browser)" --> sys
+  sys -- "request text + allowed options →<br/>structured routing suggestion" --> llm
 ```
 
-Architecture rules:
+There are no other integrations: no email, Slack or HR system of record. That is an explicit non-goal for this version.
 
-- Route handlers: parse/validate → `requireUser()` → service call → DTO. Services enforce authorization and workflow rules; pages never contain the only copy of a security rule.
-- Server components call the same services as the APIs (no internal HTTP to self).
-- No separate backend service, queue, Redis or microservices.
-- Request descriptions/comments are plain text, rendered escaped by React (no `dangerouslySetInnerHTML`).
-- Typed DTO mappers (`src/server/**/dto.ts`); full `User` rows are never serialized. Password hashes and session data never appear in responses or logs.
-- Authenticated responses are dynamic and `Cache-Control: private, no-store`.
-- Pagination: `page` default 1, `pageSize` default 20, max 100; stable ordering by timestamp then id.
-- Errors use one envelope `{error:{code,message,fieldErrors?},requestId}`; stack traces are never returned.
+### 1.2 Containers (C4 level 2)
 
-### 2.1 Source organisation
+```mermaid
+flowchart TB
+  classDef person fill:#08427b,stroke:#052e56,color:#fff
+  classDef container fill:#438dd5,stroke:#2e6295,color:#fff
+  classDef db fill:#438dd5,stroke:#2e6295,color:#fff
+  classDef ext fill:#999,stroke:#6b6b6b,color:#fff
 
-```text
-src/app/(auth)/login/page.tsx
-src/app/(app)/layout.tsx                 # requires session, renders shell/nav by role
-src/app/(app)/dashboard/page.tsx
-src/app/(app)/requests/{page,new/page,[id]/page}.tsx
-src/app/(app)/my-work/page.tsx
-src/app/(app)/onboarding/{page,[id]/page,assign/page}.tsx
-src/app/(app)/templates/{page,new/page,[id]/page}.tsx
-src/app/(app)/employees/page.tsx
-src/app/api/**/route.ts                  # thin handlers, see docs/API_CONTRACT.md
-src/components/ui/**                     # adapted ERACare/shadcn primitives
-src/components/{layout,requests,onboarding,dashboard,employees}/**
-src/server/http.ts                       # handler wrapper, error envelope, origin check, pagination
-src/server/errors.ts                     # AppError hierarchy -> HTTP status
-src/server/auth/{session,current-user,permissions,password,throttle}.ts
-src/server/requests/{service,schemas,state-machine,dto}.ts
-src/server/onboarding/{service,templates,schemas,dependencies,dates,dto}.ts
-src/server/people/{service,schemas,dto}.ts
-src/server/dashboard/service.ts
-src/server/ai/{provider,router,schema}.ts
-src/server/db.ts
-src/lib/{utils,format}.ts                # client-safe helpers
-prisma/schema.prisma, prisma/migrations/**, prisma/seed.ts, prisma/verify-seed.ts
-tests/unit/**, tests/integration/**, tests/e2e/**
+  user["👤 Employee / Manager / HR Admin"]:::person
+
+  subgraph vps["VPS 77.42.88.180 (Ubuntu 24.04, shared host)"]
+    nginx["nginx<br/><small>TLS (Let's Encrypt), reverse proxy,<br/>sets client IP header</small>"]:::container
+    subgraph app["Next.js 16 application — systemd: peopleops (Node 24)"]
+      web["Web UI<br/><small>React Server Components + client islands<br/>role-aware navigation</small>"]:::container
+      api["JSON API<br/><small>Route handlers: zod validation,<br/>origin check, error envelope</small>"]:::container
+      domain["Domain services<br/><small>auth · people · requests · onboarding ·<br/>dashboard · AI router</small>"]:::container
+    end
+    pg[("PostgreSQL 16<br/><small>docker: peopleops-postgres<br/>127.0.0.1:5442</small>")]:::db
+    bridge["AI bridge<br/><small>systemd: peopleops-ai (own Linux user,<br/>own Codex login), unix socket</small>"]:::container
+  end
+  llm["OpenAI (GPT-6.1 Sol)<br/><small>via Codex CLI</small>"]:::ext
+
+  user -- "HTTPS 443" --> nginx
+  nginx -- "HTTP 127.0.0.1:3310" --> web
+  nginx --> api
+  web -- "in-process calls<br/>(no HTTP to self)" --> domain
+  api --> domain
+  domain -- "Prisma (TCP, localhost)" --> pg
+  domain -- "JSON over unix socket<br/>/run/peopleops-ai/bridge.sock" --> bridge
+  bridge -- "codex exec (HTTPS)" --> llm
 ```
 
-### 2.2 Dependency set
+| Container | Technology | Responsibility | Why it is separate |
+| --- | --- | --- | --- |
+| Web UI + JSON API + domain services | Next.js 16 (App Router), TypeScript, Prisma 6 | All business logic, authorization and rendering | One deployable keeps a 4-day build simple. Module boundaries live in code (§1.3), not in separate network services |
+| PostgreSQL | PostgreSQL 16 in its own container | System of record | Relational integrity, constraints and transactions (§2.4) |
+| AI bridge | Node + Codex CLI under a separate Linux user | Runs one locked-down model call per suggestion | Keeps ChatGPT credentials away from the app user and the app's secrets away from the model process |
+| nginx | Existing host proxy | TLS and routing | Already shared by other sites on the VPS; this app gets its own server block |
 
-Exact versions are pinned in `package.json` and locked in `package-lock.json` (resolved 2026-11-09): Next.js 16.4.5, React 19.3.1, Prisma CLI + client 6.19.3, zod 4.6.7, iron-session 8.0.4, bcryptjs 3.0.3, @anthropic-ai/sdk 1.6.0, Tailwind CSS 3.4.19, TypeScript 5.9.3, ESLint 10.14 with eslint-config-next 16.4.5, Playwright 1.63.0, tsx 4.23. Only packages actually used are installed (the donor's MSAL, nodemailer, xlsx, reactflow, calendar etc. are excluded). `overrides.deepmerge-ts = 8.0.0` removes a high-severity advisory inside Prisma's CLI config loader.
+### 1.3 Components inside the application (C4 level 3)
 
-Prisma 7/8 were available but would require driver adapters and a config-file migration; v6 is the latest line matching the code and the docs it was written against (trade-off recorded in §9).
+The two modules never call into each other. Both depend on the **shared core**. The dashboard and AI router are read-only consumers.
 
-Tests: Node's built-in `node:test` runner (via tsx) for unit and HTTP-level integration tests; Playwright for end-to-end flows. Integration and e2e runs create a fresh uniquely named PostgreSQL database per run on the `TEST_DATABASE_URL` server, migrate and seed it, run the production build against it on port 3100, and drop only that database afterwards.
+```mermaid
+flowchart TB
+  classDef shared fill:#e8f1fb,stroke:#1168bd,color:#0b2a4a
+  classDef module fill:#fff4e5,stroke:#c77700,color:#4a2c00
+  classDef consumer fill:#eef7ee,stroke:#2e7d32,color:#1b3d1d
+  classDef infra fill:#f3f3f3,stroke:#777,color:#222
 
-## 3. Data model
+  edge["HTTP edge — src/server/http.ts<br/><small>request id · Origin check · zod parsing · error envelope · no-store</small>"]:::infra
 
-Notation: `uuid` server-generated; `text(n)` validated max length; `timestamptz` UTC instants; `date` calendar date; `?` nullable.
+  subgraph modA["Module A — Service Requests"]
+    direction TB
+    rsvc["requests/service.ts<br/><small>create · list · comment · assign · transition</small>"]:::module
+    rsm["requests/state-machine.ts<br/><small>pure transition table</small>"]:::module
+  end
 
-Enums: `Role {EMPLOYEE, MANAGER, HR_ADMIN}`, `CountryCode {BD, MY, LK, CY}`, `EmploymentStatus {ACTIVE, ON_PROBATION, ON_NOTICE}`, `RequestStatus {SUBMITTED, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED}`, `Priority {LOW, MEDIUM, HIGH, URGENT}`, `TaskStatus {NOT_STARTED, IN_PROGRESS, COMPLETED}` (BLOCKED is derived), `RequestEventKind {CREATED, ASSIGNED, REASSIGNED, STATUS_CHANGED}`.
+  subgraph modB["Module B — Onboarding"]
+    direction TB
+    osvc["onboarding/service.ts · templates.ts<br/><small>versioned templates · snapshot assignment · My Work · task transitions</small>"]:::module
+    dag["dependencies.ts · dates.ts<br/><small>DAG validation · derived BLOCKED · timezone-aware overdue</small>"]:::module
+  end
 
-| Table | Fields and constraints |
+  subgraph cons["Read-only consumers"]
+    direction TB
+    dash["dashboard/service.ts<br/><small>org + personal aggregates across both modules</small>"]:::consumer
+    ai["ai/<br/><small>router · providers · stored suggestions</small>"]:::consumer
+  end
+
+  subgraph core["Shared core — used by everything above"]
+    direction LR
+    perm["auth/permissions.ts<br/><small>ONE policy module: can* checks +<br/>scope filters for list & detail</small>"]:::shared
+    auth["auth/<br/><small>session · current user · password · throttle</small>"]:::shared
+    people["people/<br/><small>employees · reporting lines · departments · countries</small>"]:::shared
+  end
+
+  db[("Prisma → PostgreSQL")]:::infra
+
+  edge --> modA & modB & cons
+  rsvc --> rsm
+  osvc --> dag
+  modA --> core
+  modB --> core
+  cons --> core
+  core --> db
+  modA --> db
+  modB --> db
+  cons --> db
+```
+
+Rules that keep the structure honest:
+- **Authorization lives in one place.** Services call `permissions.ts`. Pages and buttons only *reflect* `allowedActions` computed on the server; hiding a button is never the security control.
+- **Database access exists only in `src/server/**`.** Server-rendered pages call the same services as the API.
+- **Full user records are never serialized.** DTO mappers return `UserSummary` / `EmployeeDTO`; password hashes and session data never leave the server or reach logs.
+- **Request text and comments are plain text,** rendered escaped by React.
+
+### 1.4 Deployment view
+
+| Concern | Choice |
 | --- | --- |
-| Country | code CountryCode PK; name text unique; timezone text (IANA) |
-| Department | id uuid PK; name text(80) unique; isActive bool default true |
-| User | id uuid PK; name text(120); email text(254) unique, lowercase; passwordHash; role Role; countryCode FK; departmentId FK; managerId uuid? self-FK; joiningDate date; employmentStatus; loginEnabled bool default true; sessionVersion int default 1; createdAt/updatedAt |
-| RequestCategory | id uuid PK; code text unique (IT_EQUIPMENT, SOFTWARE_ACCESS, HR_QUERY, FACILITIES, OTHER); name text(80); defaultDepartmentId FK |
-| ServiceRequest | id uuid PK; number int unique (DB sequence); title text(160); description text(5000); categoryId FK; priority; status default SUBMITTED; requesterId FK; assigneeId? FK; version int default 1; createdAt/updatedAt; resolvedAt?/closedAt? |
-| RequestComment | id; requestId FK; authorId FK; body text(3000); createdAt |
-| RequestEvent | id; requestId FK; actorId FK; kind; fromStatus?; toStatus; previousAssigneeId?/newAssigneeId? FK User; createdAt |
-| OnboardingTemplate | id; name text(120); description text(2000); isActive default true; version default 1; createdById FK; createdAt/updatedAt |
-| TemplateTask | id; templateId FK; key text(50); title text(160); description text(3000); departmentId FK; dueDay int ≥1; sortOrder int ≥0; unique(templateId,key); unique(templateId,sortOrder) |
-| TemplateDependency | taskId FK; prerequisiteTaskId FK; PK(taskId,prerequisiteTaskId); CHECK no self-edge; same-template enforced in service |
-| Onboarding | id; employeeId FK **unique**; templateId FK; templateVersion; templateName snapshot; startDate date; timezone snapshot; assignedById FK; assignedAt; completedAt? |
-| OnboardingTask | id; onboardingId FK; sourceTaskKey; title/description snapshot; departmentId FK; ownerId FK; dueDay; dueDate date; status default NOT_STARTED; sortOrder; version default 1; startedAt?/completedAt?; createdAt/updatedAt; unique(onboardingId,sourceTaskKey) |
-| TaskDependency | taskId FK; prerequisiteTaskId FK; PK pair; CHECK no self-edge; same onboarding enforced in service |
-| TaskEvent | id; taskId FK; actorId FK; fromStatus; toStatus; createdAt |
-| RequestAiSuggestion | requestId uuid PK/FK ServiceRequest; status (PENDING/READY/FAILED); categoryId?, priority?, suggestedDepartmentId?, suggestedAssigneeId? (FKs); explanation text(300)?; failureReason?; createdAt/updatedAt. CHECK: READY ⇒ category, priority, department set. Advisory only — never changes the request |
-| LoginThrottle | keyHash text PK (SHA-256 of normalized email + IP); windowStartedAt; attemptCount; expiresAt |
-| AiUsageBucket | userId FK; windowStart; count; PK(userId,windowStart) |
+| Host | Shared Ubuntu VPS. App isolated as system user `peopleops`, listening on `127.0.0.1:3310` only |
+| Edge | nginx server block for `peopleops.77-42-88-180.sslip.io`, Let's Encrypt certificate, HTTP→HTTPS redirect. `X-Forwarded-For` is *overwritten* so clients can't spoof it |
+| Database | Dedicated `postgres:16-alpine` container bound to localhost, named volume, 256 MB memory limit |
+| Secrets | `/etc/peopleops/peopleops.env` (root:peopleops 0640). Nothing secret is committed; `.env.example` holds placeholders |
+| Releases | Next.js standalone build made off-box (the VPS is memory-constrained), shipped as `releases/<git sha>`, switched with a symlink. Rollback = repoint the symlink |
+| Migrations / seed | `prisma migrate deploy` only (never reset). Seeding needs an explicit `ALLOW_ASSESSMENT_SEED=true` and never runs on boot |
 
-Indexes: User(managerId), User(countryCode,employmentStatus), User(departmentId); ServiceRequest(requesterId,createdAt), (assigneeId,status), (status,categoryId), (priority); RequestComment(requestId,createdAt); RequestEvent(requestId,createdAt); TemplateTask(templateId,sortOrder); TemplateDependency(prerequisiteTaskId); TaskDependency(prerequisiteTaskId); OnboardingTask(ownerId,status), (onboardingId,status), (dueDate,status); TaskEvent(taskId,createdAt); LoginThrottle(expiresAt).
+Full runbook: [deploy/DEPLOY.md](deploy/DEPLOY.md).
 
-Database CHECK constraints (added in the migration SQL): request assignee consistency (`status = 'SUBMITTED'` ⇔ `assigneeId IS NULL`), `dueDay >= 1`, `sortOrder >= 0`, no self-edges in both dependency tables, `managerId <> id`.
+### 1.5 Key runtime flows
 
-Referential rules: `onDelete: Restrict` everywhere people/departments/categories are referenced; no hard-delete endpoints for employees (disable login instead), requests or onboardings. Template update replaces child tasks transactionally (dependencies deleted first); assigned checklists reference `sourceTaskKey`, not template task IDs.
+**A request from submission to closure, including the AI recommendation**
 
-Service-level invariants: `managerId` is not self and refers to a login-enabled MANAGER or HR_ADMIN; no reporting cycles; assignee/owner is login-enabled; role is never client-supplied for the session; demoting a manager with direct reports is rejected (422).
+```mermaid
+sequenceDiagram
+  autonumber
+  actor E as Employee
+  actor M as Manager (or HR)
+  actor A as Assignee (e.g. IT)
+  participant API as API + services
+  participant DB as PostgreSQL
+  participant AI as AI router → LLM
+
+  E->>API: POST /requests {title, description, category, priority}
+  API->>DB: INSERT request (SUBMITTED) + CREATED event (one transaction)
+  API-->>E: 201 RequestDTO (no waiting on AI)
+  API-)AI: after(): classify + recommend (background)
+  AI->>DB: read categories, departments, ≤60 eligible candidates
+  AI-->>API: {category, priority, team, person, explanation}
+  API->>API: validate every ID against live data
+  API->>DB: UPSERT RequestAiSuggestion (READY) — request row untouched
+  M->>API: GET /requests/:id/ai-suggestion
+  API-->>M: suggestion incl. person (only for users who can assign)
+  M->>API: POST /requests/:id/assign {assigneeId, expectedVersion}
+  API->>DB: conditional UPDATE (id, version, status) + ASSIGNED event
+  A->>API: POST /transition START, then RESOLVE
+  E->>API: POST /transition CLOSE
+```
+
+**Assigning an onboarding checklist and working it**
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor HR as HR Admin
+  actor O as Task owner (IT, Compliance, Manager…)
+  participant API as API + services
+  participant DB as PostgreSQL
+
+  HR->>API: GET /onboarding/assignment-options?employeeId&templateId
+  API-->>HR: tasks with real due dates + eligible owners per task
+  HR->>API: POST /onboarding {owners[], expectedTemplateVersion}
+  API->>DB: ONE transaction: check template version → create Onboarding →<br/>snapshot tasks → copy dependency edges by key
+  Note over API,DB: missing/ineligible owner → 422, nothing written<br/>second checklist for same hire → 409 (unique employeeId)
+  O->>API: GET /my-work (tasks across all hires, minimal hire context)
+  O->>API: POST /onboarding-tasks/:id/transition START
+  API->>DB: lock Onboarding row FOR UPDATE → check prerequisites → update + TaskEvent
+  O->>API: COMPLETE → if no incomplete tasks remain, set Onboarding.completedAt (same transaction)
+```
+
+---
+
+## 2. Data model
+
+### 2.1 Entity-relationship diagram
 
 ```mermaid
 erDiagram
-  USER ||--o{ USER : manages
-  USER ||--o{ SERVICE_REQUEST : submits
-  USER o|--o{ SERVICE_REQUEST : assigned
-  SERVICE_REQUEST ||--o{ REQUEST_COMMENT : contains
-  SERVICE_REQUEST ||--o{ REQUEST_EVENT : records
-  USER ||--o| ONBOARDING : receives
-  ONBOARDING_TEMPLATE ||--o{ ONBOARDING : instantiates
-  ONBOARDING_TEMPLATE ||--o{ TEMPLATE_TASK : defines
-  TEMPLATE_TASK ||--o{ TEMPLATE_DEPENDENCY : depends
-  ONBOARDING ||--|{ ONBOARDING_TASK : contains
-  USER ||--o{ ONBOARDING_TASK : owns
-  ONBOARDING_TASK ||--o{ TASK_DEPENDENCY : depends
-  ONBOARDING_TASK ||--o{ TASK_EVENT : records
+  COUNTRY ||--o{ USER : "located in"
+  DEPARTMENT ||--o{ USER : "member of"
+  USER ||--o{ USER : "manages (managerId)"
+
+  USER ||--o{ SERVICE_REQUEST : "submits"
+  USER |o--o{ SERVICE_REQUEST : "assigned to"
+  REQUEST_CATEGORY ||--o{ SERVICE_REQUEST : "classifies"
+  DEPARTMENT ||--o{ REQUEST_CATEGORY : "default team"
+  SERVICE_REQUEST ||--o{ REQUEST_COMMENT : "thread"
+  SERVICE_REQUEST ||--o{ REQUEST_EVENT : "audit trail"
+  SERVICE_REQUEST ||--o| REQUEST_AI_SUGGESTION : "advisory"
+
+  USER ||--o{ ONBOARDING_TEMPLATE : "creates"
+  ONBOARDING_TEMPLATE ||--|{ TEMPLATE_TASK : "defines"
+  TEMPLATE_TASK ||--o{ TEMPLATE_DEPENDENCY : "requires"
+  ONBOARDING_TEMPLATE ||--o{ ONBOARDING : "instantiated as"
+  USER ||--o| ONBOARDING : "new hire (unique)"
+  ONBOARDING ||--|{ ONBOARDING_TASK : "snapshot of tasks"
+  DEPARTMENT ||--o{ ONBOARDING_TASK : "owning dept"
+  USER ||--o{ ONBOARDING_TASK : "owner"
+  ONBOARDING_TASK ||--o{ TASK_DEPENDENCY : "requires"
+  ONBOARDING_TASK ||--o{ TASK_EVENT : "audit trail"
+
+  USER {
+    uuid id PK
+    string email UK "lowercase"
+    string passwordHash "bcrypt"
+    enum role "EMPLOYEE | MANAGER | HR_ADMIN"
+    enum countryCode FK
+    uuid departmentId FK
+    uuid managerId FK "nullable, not self, no cycles"
+    date joiningDate
+    enum employmentStatus "ACTIVE | ON_PROBATION | ON_NOTICE"
+    bool loginEnabled
+    int sessionVersion "revokes sessions"
+  }
+  SERVICE_REQUEST {
+    uuid id PK
+    int number UK "DB sequence, #123"
+    string title
+    string description
+    uuid categoryId FK
+    enum priority "LOW..URGENT"
+    enum status "SUBMITTED..CLOSED"
+    uuid requesterId FK
+    uuid assigneeId FK "null iff SUBMITTED (CHECK)"
+    int version "optimistic concurrency"
+    timestamptz resolvedAt
+    timestamptz closedAt
+  }
+  REQUEST_EVENT {
+    uuid id PK
+    enum kind "CREATED | ASSIGNED | REASSIGNED | STATUS_CHANGED"
+    enum fromStatus
+    enum toStatus
+    uuid actorId FK
+    uuid previousAssigneeId FK
+    uuid newAssigneeId FK
+  }
+  ONBOARDING_TASK {
+    uuid id PK
+    uuid onboardingId FK
+    string sourceTaskKey "unique per onboarding"
+    string title "snapshot"
+    uuid departmentId FK
+    uuid ownerId FK
+    int dueDay "Day 1 = start date"
+    date dueDate "computed at assignment"
+    enum status "NOT_STARTED | IN_PROGRESS | COMPLETED"
+    int version
+  }
+  ONBOARDING {
+    uuid id PK
+    uuid employeeId FK,UK "one checklist per hire"
+    uuid templateId FK
+    int templateVersion "snapshot"
+    date startDate
+    string timezone "IANA, snapshot"
+    timestamptz completedAt
+  }
 ```
 
-## 4. Authentication and authorization
+The diagram shows the key attributes. The complete field list is in the data dictionary below.
 
-- Logout destroys the cookie **and increments `sessionVersion`**, so a copied pre-logout cookie is rejected too (sealed cookies are otherwise stateless). Trade-off: logout ends the user's sessions on all devices.
-- Login: zod-validated `{email,password}`; email normalized; throttled with two DB-backed atomic counters — 10 attempts / 15 min per email+client IP (IP = `x-real-ip` or the last `X-Forwarded-For` hop, never the client-supplied first hop) and 30 / 15 min per email regardless of IP; bcrypt compare (a dummy compare runs for unknown emails to equalize timing); generic `INVALID_CREDENTIALS`. Success regenerates the session.
-- Session cookie: iron-session, HttpOnly, `Secure` when `APP_URL` is https, SameSite=Lax, path `/`, 7 days. Contains `{userId, sessionVersion}` only.
-- `getCurrentUser()` loads the user on every protected request and denies missing, `loginEnabled=false`, or `sessionVersion` mismatch. Disabling an account or changing its password increments `sessionVersion`.
-- Mutations require `Origin` equal to the configured `APP_URL` origin (Host header is never trusted).
-- Central policy module `src/server/auth/permissions.ts`: `isHrAdmin`, `isDirectManagerOf`, `canReadRequest`, `canAssignRequest`, `canTransitionRequest`, `canReadOnboarding`, `canWorkTask`, plus `requestReadScopeWhere(actor)` / `onboardingReadScopeWhere(actor)` Prisma filters so list queries and detail checks share one definition.
-- Out-of-scope records → 404; visible record but disallowed action → 403.
+### 2.2 Data dictionary
 
-Full matrix: `docs/PERMISSIONS.md`.
+`uuid` = server-generated; `text(n)` = maximum length enforced by the database and validation; `timestamptz` = UTC instant; `date` = calendar date; `?` = nullable.
 
-## 5. Request state machine
+| Table | Fields and constraints |
+| --- | --- |
+| **Shared core** | |
+| Country | code `BD/MY/LK/CY` PK; name unique; timezone (IANA) |
+| Department | id PK; name text(80) unique; isActive. Includes a "Manager" pseudo-department used for manager-owned onboarding tasks |
+| User | id PK; name text(120); email text(254) unique, CHECK lowercase; passwordHash; role; countryCode FK; departmentId FK; managerId? self-FK, CHECK ≠ id; joiningDate date; employmentStatus; loginEnabled; sessionVersion; createdAt/updatedAt |
+| LoginThrottle | keyHash PK (SHA-256 of email + client IP, or email + `*`); windowStartedAt; attemptCount; expiresAt |
+| AiUsageBucket | (userId, windowStart) PK; count — per-user, per-minute AI budget |
+| **Module A** | |
+| RequestCategory | id PK; code unique (IT_EQUIPMENT, SOFTWARE_ACCESS, HR_QUERY, FACILITIES, OTHER); name; defaultDepartmentId FK |
+| ServiceRequest | id PK; number unique (sequence); title text(160); description text(5000); categoryId FK; priority; status; requesterId FK; assigneeId? FK; version; createdAt/updatedAt; resolvedAt?; closedAt?. CHECK `status = SUBMITTED ⇔ assigneeId IS NULL` |
+| RequestComment | id PK; requestId FK; authorId FK; body text(3000); createdAt |
+| RequestEvent | id PK; requestId FK; actorId FK; kind; fromStatus?; toStatus; previousAssigneeId?/newAssigneeId? FK; createdAt. Append-only |
+| RequestAiSuggestion | requestId PK/FK; status `PENDING/READY/FAILED`; categoryId?, priority?, suggestedDepartmentId?, suggestedAssigneeId? (all FKs); explanation text(300)?; failureReason?; timestamps. CHECK READY ⇒ category, priority and department are set |
+| **Module B** | |
+| OnboardingTemplate | id PK; name text(120); description text(2000); isActive; version; createdById FK; timestamps |
+| TemplateTask | id PK; templateId FK; key text(50); title; description; departmentId FK; dueDay ≥ 1 (CHECK); sortOrder ≥ 0 (CHECK); unique (templateId, key) and (templateId, sortOrder) |
+| TemplateDependency | (taskId, prerequisiteTaskId) PK; CHECK no self-edge; same-template rule and acyclicity checked in the service |
+| Onboarding | id PK; employeeId FK **unique**; templateId FK; templateVersion; templateName; startDate; timezone; assignedById FK; assignedAt; completedAt? |
+| OnboardingTask | id PK; onboardingId FK; sourceTaskKey; title/description (snapshot); departmentId FK; ownerId FK; dueDay; dueDate; status; sortOrder; version; startedAt?; completedAt? (CHECK completedAt set ⇔ COMPLETED); unique (onboardingId, sourceTaskKey) |
+| TaskDependency | (taskId, prerequisiteTaskId) PK; CHECK no self-edge |
+| TaskEvent | id PK; taskId FK; actorId FK; fromStatus; toStatus; createdAt. Append-only |
 
-| From | Action | To | Actor / preconditions |
+**Indexes**, chosen for the actual queries:
+- User: (managerId), (countryCode, employmentStatus), (departmentId)
+- ServiceRequest: (requesterId, createdAt), (assigneeId, status), (status, categoryId), (priority)
+- Comments and events: (requestId, createdAt)
+- Dependencies: reverse prerequisite indexes
+- OnboardingTask: (ownerId, status), (onboardingId, status), (dueDate, status)
+- LoginThrottle: (expiresAt)
+
+**Referential rules.** Every reference to people, departments or categories uses `ON DELETE RESTRICT`. There are no hard deletes: an employee leaving is `loginEnabled = false`, and history keeps pointing at real rows.
+
+### 2.3 How the two modules share data without duplication
+
+| Shared concept | Single source | Used by Module A as | Used by Module B as |
 | --- | --- | --- | --- |
-| — | Submit | SUBMITTED | Any user; requester = self |
-| SUBMITTED | Assign | ASSIGNED | HR, or requester's direct manager (not for own request); eligible login-enabled assignee |
-| ASSIGNED | Reassign | ASSIGNED | Same actors; different eligible assignee; only before work starts |
-| ASSIGNED | Start | IN_PROGRESS | Current assignee only |
-| IN_PROGRESS | Resolve | RESOLVED | Current assignee only |
-| RESOLVED | Close | CLOSED | Requester, requester's direct manager, or HR |
+| Person | `User` | requester, assignee, comment author, event actor | new hire, task owner, template author, event actor |
+| Team | `Department` | a category's default team; the AI's "suggested team" | a task's owning department; who is eligible to own it |
+| Reporting line | `User.managerId` | the manager may assign and close the team's requests | the manager sees reports' checklists and owns "Manager" tasks |
+| Location and time | `Country` (+ IANA timezone) | dashboard filters, AI prefers same-country assignees | deadlines and "overdue" are computed in the hire's timezone |
+| Access rules | `permissions.ts` | `canReadRequest`, `canAssignRequest`, … | `canReadOnboarding`, `canWorkTask`, … |
+| Audit pattern | `*Event` tables (actor, from, to, time) | `RequestEvent` | `TaskEvent` |
 
-Pure transition table in `src/server/requests/state-machine.ts`. Every mutation carries `expectedVersion`; the service runs `updateMany({where:{id, version, status}})` inside a transaction, increments `version`, and appends the `RequestEvent` in the same transaction. Zero rows → 409 `STALE_VERSION`. No events without the mutation.
+There are no per-module copies of people or teams. Only one thing is copied on purpose: **an assigned checklist copies its template's tasks** (title, description, department, due day, dependencies). Editing a template must not silently change a new hire's existing deadlines or delete tasks someone is already working on ([ADR-4](#adr-4--snapshot-checklists-vs-live-templates)). The copy keeps `templateId`, `templateVersion` and `sourceTaskKey`, so you can always trace where it came from.
 
-## 6. Onboarding rules and dates
+Both modules come together in the dashboard query "new hires (joined ≤ 60 days ago, have a checklist) with open IT-equipment requests". That is one join through `User`, with no synchronisation job.
 
-- Templates: 1–30 tasks; unique keys and sort orders; prerequisites must reference keys in the same template; no self-edges; cycles detected with Kahn topological sort (`dependencies.ts`), returning the keys involved. Update requires `expectedVersion` and replaces tasks atomically, incrementing version.
-- Assignment: HR picks employee + active template; `assignment-options` returns computed due dates and eligible owners per task (department members; for the `Manager` department, only the hire's direct manager). HR supplies one owner per task. One transaction: verify template version, create `Onboarding`, snapshot tasks, map keys → new IDs for `TaskDependency`. Unique `employeeId` → 409. Missing/ineligible owner → 422 with no partial rows.
-- Timezones: BD Asia/Dhaka, MY Asia/Kuala_Lumpur, LK Asia/Colombo, CY Asia/Nicosia; snapshotted on the onboarding.
-- `dueDate = startDate + (dueDay − 1)` days using UTC date-only arithmetic (no local-time milliseconds; DST cannot shift it).
-- `isOverdue = status ≠ COMPLETED && todayIn(timezone) > dueDate`, where `todayIn` uses `Intl.DateTimeFormat` with the IANA zone. One function (`dates.ts`) is used by dashboard, lists, detail and My Work.
-- `effectiveStatus = BLOCKED` if stored `NOT_STARTED` and any prerequisite is not `COMPLETED`; otherwise stored status. Clients cannot set BLOCKED.
-- Start: owner only, stored NOT_STARTED, all prerequisites COMPLETED. Complete: owner only, IN_PROGRESS. Each transition is version-checked and writes a `TaskEvent`.
-- Concurrency for completion: the transaction first takes `SELECT … FOR UPDATE` on the parent `Onboarding` row, which serializes task transitions within one checklist; after completing it counts incomplete tasks and sets `completedAt` when zero. Two concurrent final completions therefore cannot both observe "one remaining".
-- Counts: pending = total − completed; blocked and overdue are overlapping flags; percent = round(completed/total·100).
+### 2.4 Why PostgreSQL (and this shape)
 
-## 7. Dashboard
+- **The data is relational and its rules can be enforced in the database.** Reporting hierarchies, dependency graphs, requests that refer to people and categories, and audit trails all benefit from foreign keys, unique constraints and `CHECK` constraints. For example, "an unassigned request must be SUBMITTED" is enforced by the database itself, not only by application code.
+- **Workflows need transactions.** A state change and its audit event must commit together. Creating a checklist (onboarding + 10–12 tasks + dependency edges) must be all-or-nothing. Two people finishing the last two tasks at once must still mark the checklist complete (a row lock — `SELECT … FOR UPDATE`).
+- **Reporting is SQL-shaped.** Grouping by country, status and category, plus cross-module joins, are plain SQL aggregates.
+- **Considered and rejected:**
+  - *MongoDB:* integrity rules would move into application code, and cross-module joins get harder.
+  - *SQLite:* simpler, but weaker under concurrent writes, and harder to run as a separate managed service later.
+- **Why snapshots plus derived state, not stored flags:** "Blocked" and "Overdue" are computed when read (§5.2). That means no scheduler and no stale flags; at about 100 people it is cheap.
 
-HR dashboard (`/api/dashboard`) computed from the database at one `asOf` instant: headcount by country (all employees regardless of status), open requests (SUBMITTED/ASSIGNED/IN_PROGRESS) by status and category, active hires (onboardings with incomplete tasks), overdue tasks (shared date function), and the cross-module insight: employees who joined within the preceding 60 days, have an onboarding, and have open IT_EQUIPMENT requests. A bar chart (plain SVG/CSS, with a text table) shows requests by status and category. Non-HR users get `/api/dashboard/mine` (personal and, for managers, direct-report team summaries).
+---
 
-## 8. AI request router
+## 3. API design
 
-Flow: draft title/description → `POST /api/ai/route-request` → authenticate, origin check, validate lengths, DB-backed rate limit (10/min/user, counted before any provider call) → load categories, departments and a capped candidate list (≤60 login-enabled users in the support departments: opaque id, name, department, country only — no email or HR fields) → the provider selected by `AI_PROVIDER`: Anthropic Messages API with structured outputs (`output_config.format`, model `ANTHROPIC_MODEL`) or OpenAI Responses API with strict `json_schema` output and `store:false` (model `OPENAI_MODEL`), or — as deployed — a local **Codex bridge** (`AI_PROVIDER=codex`): a separate unprivileged service with its own ChatGPT/Codex login that runs a locked-down ephemeral `codex exec -m gpt-6.1-sol --output-schema …` per request over a unix socket (deploy/DEPLOY.md); both 7 s per attempt and one retry on transient errors (≈15 s budget) → strict zod validation against the live IDs → `RouterDTO {categoryId, priority, suggestedDepartmentId, suggestedAssigneeId|null, suggestedAssigneeName|null, explanation(≤300), needsReview:true}`. Unknown category/department/priority → 503 `AI_INVALID_OUTPUT`; a suggested person not in the suggested department or not in the candidate set is replaced with `null`. The request text is fenced as untrusted data in the user turn; the system prompt is the pack's template, amended after the first live run (the model returned no person for clear IT cases) to recommend a candidate from the suggested department, preferring the requester's country. Two entry points share one core (`suggestRouting`): (1) the requester's draft-time **Suggest routing** button (`POST /api/ai/route-request`), which can apply category/priority to the form; (2) **auto-classification on submit**: `POST /api/requests` schedules `generateRequestSuggestion` with Next's `after()` so submitting never waits on the model, and stores the result in `RequestAiSuggestion`. The request detail page shows it to everyone who can read the request; the suggested **person** and the **Refresh** / **Use as assignee** actions only to users who can assign (manager of the requester, HR). Using it fills the normal assignment form — the AI never assigns, and the request row (category, priority, status) is never modified by AI. Logs contain request id, latency and outcome only. Missing key → 503 `AI_UNAVAILABLE`; the request form keeps the draft and manual submission works. No deterministic fallback is labelled as AI.
+REST over JSON, base `/api`, cookie session.
 
-## 8a. Endpoint inventory
+**Common conventions**
 
-Full input/output DTOs and error codes: `docs/API_CONTRACT.md`. All routes return `{data}` / `{data, meta}` or `{error:{code,message,fieldErrors?}, requestId}`; mutations require `Origin` = `APP_URL`.
+| Convention | Rule |
+| --- | --- |
+| Envelopes | `{data}` for one object; `{data, meta:{page,pageSize,total}}` for lists; `{error:{code,message,fieldErrors?}, requestId}` for errors |
+| Status codes | 400 invalid input · 401 not signed in · **404 record outside your scope (existence is not leaked)** · 403 visible but not allowed · 409 version conflict or duplicate · 422 business-rule failure · 429 throttled · 503 AI unavailable |
+| Write bodies | Strict schemas: unknown fields such as `status` or `assigneeId` on create are rejected |
+| Mutations | Need `Origin` = the app's own origin (CSRF defence). State changes carry `expectedVersion` |
+| Pagination | `page` (default 1) and `pageSize` (default 20, max 100); stable ordering |
 
-| Area | Endpoints | Authorization (enforced in services) |
+Full request and response types (DTOs) are in **[docs/API_CONTRACT.md](docs/API_CONTRACT.md)**. Every endpoint, grouped as the brief asks:
+
+**Auth**
+
+| Method | Path | Request → Response | Who |
+| --- | --- | --- | --- |
+| POST | /auth/login | `{email,password}` → `{user: EmployeeDTO}` + session cookie | Public; throttled |
+| POST | /auth/logout | — → 204, and every earlier session for this user is revoked | Signed in |
+| GET | /auth/me | → EmployeeDTO | Signed in |
+
+**Users and reference data**
+
+| Method | Path | Request → Response | Who |
+| --- | --- | --- | --- |
+| GET | /employees | `q, countryCode, departmentId, employmentStatus, page` → EmployeeDTO[] | HR: all · Manager: self + direct reports · Employee: 403 |
+| POST | /employees | `{name,email,initialPassword,role,countryCode,departmentId,managerId,joiningDate,employmentStatus}` → EmployeeDTO | HR |
+| GET | /employees/:id | → EmployeeDTO | Self, their manager, HR (else 404) |
+| PATCH | /employees/:id | subset of fields above + `loginEnabled` → EmployeeDTO | HR; reporting-line rules checked |
+| GET | /employees/manager-options | → UserSummary[] | HR |
+| GET | /countries · /departments · /request-categories | → lookup lists | Signed in |
+
+**Service requests**
+
+| Method | Path | Request → Response | Who |
+| --- | --- | --- | --- |
+| GET | /requests | `scope=mine\|assigned\|team\|all, status, categoryId, priority, countryCode, q, page` → RequestDTO[] (each with `allowedActions`) | `team`: Manager/HR · `all`: HR |
+| POST | /requests | `{title,description,categoryId,priority}` → RequestDTO (201); triggers the AI suggestion in the background | Signed in (requester = self) |
+| GET | /requests/:id | → RequestDTO | Read scope |
+| GET / POST | /requests/:id/comments | `{body}` → CommentDTO[] / CommentDTO | Read scope |
+| GET | /requests/:id/events | → RequestEventDTO[] (audit trail) | Read scope |
+| GET | /requests/:id/assignee-options | `q, departmentId` → UserSummary[] (≤100) | Can assign |
+| POST | /requests/:id/assign | `{assigneeId, expectedVersion}` → RequestDTO | HR or the requester's manager |
+| POST | /requests/:id/transition | `{action: START\|RESOLVE\|CLOSE, expectedVersion}` → RequestDTO | Per §5.1 |
+
+**Onboarding**
+
+| Method | Path | Request → Response | Who |
+| --- | --- | --- | --- |
+| GET / POST | /onboarding-templates | `{name,description,tasks[]}` → TemplateDTO | HR |
+| GET / PUT | /onboarding-templates/:id | `{…, isActive, expectedVersion}` → TemplateDTO (new version) | HR |
+| GET | /onboarding | `progress=active\|completed, countryCode, page` → OnboardingSummary[] (done/pending/blocked/overdue counts) | Own / direct reports / all |
+| GET | /onboarding/:id | → OnboardingDTO (tasks with `effectiveStatus`, `isOverdue`, prerequisites) | Own / their manager / HR |
+| GET | /onboarding/assignment-options | `employeeId, templateId` → dated tasks + eligible owners | HR |
+| GET | /onboarding/unassigned-employees | → UserSummary[] | HR |
+| POST | /onboarding | `{employeeId, templateId, expectedTemplateVersion, owners[]}` → OnboardingDTO | HR |
+| POST | /onboarding-tasks/:id/transition | `{action: START\|COMPLETE, expectedVersion}` → TaskDTO | Task owner only |
+| GET | /onboarding-tasks/:id/events | → TaskEvent[] | Owner or checklist reader |
+| GET | /my-work | `kind=task\|request, status, overdue` → owned tasks (with minimal hire info) or assigned requests | Self |
+
+**Dashboard**
+
+| Method | Path | Request → Response | Who |
+| --- | --- | --- | --- |
+| GET | /dashboard | → headcount by country, open requests by status/category, active hires, overdue tasks, cross-module insight, `asOf` | HR |
+| GET | /dashboard/mine | → personal counts (+ team counts for a manager) | Signed in |
+
+**AI**
+
+| Method | Path | Request → Response | Who |
+| --- | --- | --- | --- |
+| POST | /ai/route-request | `{title, description}` → RouterDTO `{categoryId, priority, suggestedDepartmentId, suggestedAssigneeId?, explanation, needsReview}` (draft help; nothing is written) | Signed in; 10/min |
+| GET | /requests/:id/ai-suggestion | → stored suggestion (the person is included only for users who can assign) | Read scope |
+| POST | /requests/:id/ai-suggestion | → a fresh suggestion | Can assign; 10/min |
+
+**Operations:** `GET /health` → `{status:"ok"}` (public, reveals nothing about configuration).
+
+---
+
+## 4. Access control
+
+### 4.1 What each role can see and do
+
+| Capability | Employee | Manager | HR Admin |
+| --- | --- | --- | --- |
+| Submit a request | ✔ own | ✔ own | ✔ own |
+| See requests | own + assigned to me | + direct reports' requests | all (filter by status, category, priority, country) |
+| Comment | on any request I can see | same | all |
+| Assign / reassign | — | direct reports' requests (not own) | all |
+| Start / resolve | only if I'm the assignee | same | same (no admin bypass) |
+| Close a resolved request | if I'm the requester | + direct reports' requests | all |
+| See onboarding checklist | own | own + direct reports | all |
+| Work an onboarding task | only tasks I own (via My Work) | same | same |
+| Templates · assign checklists · manage employees | — | — | ✔ |
+| Employee list | — | self + direct reports (read-only) | all |
+| Dashboard | personal | personal + team | organisation-wide |
+| AI suggestions | while drafting; team/category on own requests | + suggested person on requests I can assign | same, all open requests |
+
+### 4.2 How it is enforced
+
+```mermaid
+flowchart TB
+  classDef step fill:#e8f1fb,stroke:#1168bd,color:#0b2a4a
+  classDef deny fill:#fdecea,stroke:#c62828,color:#5f1111
+  req([HTTP request]) --> o["Mutation?<br/>Origin = APP_URL"]:::step
+  o -- no --> d403a["403 BAD_ORIGIN"]:::deny
+  o -- ok --> s["Session cookie valid?<br/>user enabled?<br/>sessionVersion matches?"]:::step
+  s -- no --> d401["401"]:::deny
+  s -- yes --> v["zod schema<br/>(strict)"]:::step
+  v -- no --> d400["400"]:::deny
+  v -- ok --> r["Record in actor's<br/>read scope?"]:::step
+  r -- no --> d404["404 (no existence leak)"]:::deny
+  r -- yes --> p["Action allowed?<br/>permissions.ts"]:::step
+  p -- no --> d403["403"]:::deny
+  p -- yes --> w["State/business rule?<br/>state machine, DAG, owners"]:::step
+  w -- no --> d422["422"]:::deny
+  w -- yes --> c["Conditional write<br/>(id, version, status)"]:::step
+  c -- 0 rows --> d409["409 STALE_VERSION"]:::deny
+  c -- ok --> ok([200 + audit event])
+```
+
+- **One policy module** (`src/server/auth/permissions.ts`) defines both per-record checks (`canReadRequest`, `canAssignRequest`, `canTransitionRequest`, `canReadOnboarding`, `canWorkTask`) and the **scope filters** used by list queries (`requestReadScopeWhere`, `onboardingReadScopeWhere`, `employeeListScopeWhere`). Lists and detail pages therefore can't disagree about who sees what.
+- **The role is never trusted from the client.** The cookie (encrypted with iron-session) holds only `{userId, sessionVersion}`. Each request reloads the user, so a role change, a disabled account or a logout takes effect immediately.
+- **Row-level scoping is done in the application layer** (Prisma `where` clauses built by the policy module), not PostgreSQL row-level security. See [ADR-7](#adr-7--application-layer-authorization-vs-postgresql-row-level-security).
+- **Two narrow exceptions are written down and tested:**
+  - An assignee can work one request from another team.
+  - A task owner sees their own tasks with minimal hire information, but not the hire's full checklist (it returns 404).
+- **Login hardening:**
+  - bcrypt hashing, with a dummy hash check so unknown emails take the same time.
+  - The same generic error for every failed login.
+  - Two throttles stored in the database: 10 attempts per 15 minutes per email + IP, and 30 per email regardless of IP.
+
+---
+
+## 5. State machines
+
+### 5.1 Service request lifecycle
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> SUBMITTED: Submit<br/>any signed-in user (requester = self)
+  SUBMITTED --> ASSIGNED: Assign<br/>HR or requester's manager<br/>(not on own request)
+  ASSIGNED --> ASSIGNED: Reassign<br/>same actors, different assignee
+  ASSIGNED --> IN_PROGRESS: Start<br/>current assignee only
+  IN_PROGRESS --> RESOLVED: Resolve<br/>current assignee only
+  RESOLVED --> CLOSED: Close<br/>requester, their manager, or HR
+  CLOSED --> [*]
+```
+
+| Transition | Guard (checked on the server) | Side effects (same transaction) |
 | --- | --- | --- |
-| Auth | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | public (throttled) / session |
-| Lookups | `GET /countries`, `/departments`, `/request-categories` | any session |
-| Employees | `GET,POST /employees`, `GET,PATCH /employees/:id`, `GET /employees/manager-options` | list: HR all, manager self+reports, employee 403; writes HR |
-| Requests | `GET,POST /requests`, `GET /requests/:id`, `GET,POST /requests/:id/ai-suggestion`, `GET,POST /requests/:id/comments`, `GET /requests/:id/events`, `GET /requests/:id/assignee-options`, `POST /requests/:id/assign`, `POST /requests/:id/transition` | read scope = own/assigned/direct reports/HR (else 404); assign = HR or requester's manager; start/resolve = assignee; close = requester/manager/HR |
-| Templates | `GET,POST /onboarding-templates`, `GET,PUT /onboarding-templates/:id` | HR |
-| Onboarding | `GET,POST /onboarding`, `GET /onboarding/:id`, `GET /onboarding/assignment-options`, `GET /onboarding/unassigned-employees` | read own/reports/all; assign HR |
-| Tasks | `POST /onboarding-tasks/:id/transition`, `GET /onboarding-tasks/:id/events` | transition owner only; events owner or checklist scope |
-| Work & dashboard | `GET /my-work`, `GET /dashboard` (HR), `GET /dashboard/mine` | current user's assignments; HR org view |
-| AI | `POST /ai/route-request` | any session; 10/min/user; never writes |
-| Health | `GET /health` | public, no configuration details |
+| Submit | Valid category and priority. Status, assignee and requester can't be supplied | `RequestEvent(CREATED)`. Background AI suggestion is queued |
+| Assign / Reassign | Actor can assign; the assignee is active and isn't the requester; status is SUBMITTED (assign) or ASSIGNED (reassign) | `assigneeId` set, `version+1`, `RequestEvent(ASSIGNED / REASSIGNED)` with previous and new assignee |
+| Start | Actor is the assignee; status is ASSIGNED | `version+1`, `RequestEvent(STATUS_CHANGED)` |
+| Resolve | Actor is the assignee; status is IN_PROGRESS | `resolvedAt`, `version+1`, event |
+| Close | Requester, their manager or HR; status is RESOLVED | `closedAt`, `version+1`, event |
 
-## 9. Trade-offs
+- **No skipped states, reopening, cancelling or deleting.** There is no generic "set status" endpoint.
+- **Every change is concurrency-safe.** The update only applies if `(id, expectedVersion, current status)` still match; otherwise it returns 409. The audit event is written only if the change happened. A test fires two simultaneous assignments five times: exactly one succeeds each time, with exactly one event.
 
-1. **Single Next.js deployment vs separate frontend/backend.** Fewer moving parts for a four-day build and a 100-person organisation; the `src/server` domain-service boundary keeps extraction possible later. Cost: API and UI scale together.
-2. **Relational PostgreSQL vs document store.** Reporting lines, request history and task DAGs need relations, constraints and transactions. Larger scale would be tuned with query plans and workload evidence.
-3. **Selective UI reuse vs ERACare fork.** Saves presentation work without importing MSP contracts, legacy permissions, migrations or unrelated modules. Cost: provenance must be disclosed and maintained.
-4. **Snapshot onboarding vs live templates.** Existing hires keep stable tasks/deadlines when templates change. Cost: fixing a template error for already-assigned hires needs an explicit (future) migration feature.
-5. **Advisory AI vs autonomous assignment.** Suggestions are reviewed and cannot bypass manager permissions. Cost: an extra click; routing accuracy is not yet measured.
-6. **Derived BLOCKED/overdue vs stored statuses.** No scheduler and no stale flags. Cost: computed on read (cheap at this size).
-7. **Row lock on Onboarding vs SERIALIZABLE + retry.** A per-checklist `FOR UPDATE` is simple to reason about and test; contention is only within one hire's checklist.
-8. **Prisma 6 vs 7/8.** Staying on the v6 client avoids a driver-adapter/config migration during a four-day build; cost: an upgrade is deferred work.
-9. **Stateless sealed cookie + `sessionVersion` vs server-side session table.** No session store to run; revocation is per-user (logout/disable bumps the version), not per-device.
+### 5.2 Onboarding task lifecycle
 
-## 10. Limitations (MVP)
+`BLOCKED` is **not stored**. It is worked out whenever a task is read (`effectiveStatus`), so it can't go stale and nobody can set or clear it by hand.
 
-No reopening, cancellation or deletion of requests/tasks; no attachments, email, notifications, password reset or public signup; templates cannot be migrated onto existing checklists; AI routing accuracy is not evaluated beyond the scenario list in `docs/ACCEPTANCE.md`. Two HR admins editing reporting lines at the same moment could each pass the cycle check (HR-only, low likelihood; validated per request, not under a cross-row lock). My Work filters derived flags (blocked/overdue) in memory after loading an owner's tasks — fine for hundreds of tasks per owner, not for very large volumes. Request list search uses `ILIKE` without trigram indexes. Logout signs a user out on all devices. Overdue counts change over time by design (they are computed against "today" in each hire's timezone).
+```mermaid
+stateDiagram-v2
+  direction LR
+  state "NOT_STARTED (stored)" as NS
+  state "BLOCKED (derived)" as BL
+  state "IN_PROGRESS (stored)" as IP
+  state "COMPLETED (stored)" as CO
+
+  [*] --> NS: checklist assigned<br/>(snapshot from template)
+  NS --> BL: any prerequisite<br/>not COMPLETED
+  BL --> NS: last prerequisite completed<br/>(automatic, no manual unblock)
+  NS --> IP: Start<br/>task owner only,<br/>all prerequisites COMPLETED
+  IP --> CO: Complete<br/>task owner only
+  CO --> [*]
+
+  note right of CO
+    Overdue is a separate flag:
+    not COMPLETED and today (in the
+    hire's timezone) is after dueDate.
+    A task can be BLOCKED and OVERDUE.
+  end note
+```
+
+| Rule | Detail |
+| --- | --- |
+| Dependencies | Template tasks can list prerequisite keys within the same template. The template is rejected (422) for a self-reference, an unknown key, a duplicate, or a cycle (found by topological sort, which names the loop) |
+| Start | Owner only (HR and managers get no bypass). Stored status must be NOT_STARTED and every prerequisite COMPLETED; otherwise 422 naming the blocking tasks |
+| Complete | Owner only; stored status must be IN_PROGRESS. Completion is final in this version, so a prerequisite can never "un-complete" under a dependent task |
+| Checklist completion | Each task change locks the parent `Onboarding` row (`SELECT … FOR UPDATE`), then recounts incomplete tasks and sets `completedAt` when none remain. Two owners finishing the last two tasks at once still mark the checklist complete (tested over 6 rounds) |
+| Deadlines | `dueDate = startDate + (dueDay − 1)` in calendar days: Day 1 = start date, Week 1 = Day 7, Day 30 = start + 29. Date-only arithmetic, so daylight-saving changes (e.g. Cyprus) can't shift a deadline |
+| Overdue | Not COMPLETED, and the current date in the hire's timezone (Asia/Dhaka, Asia/Kuala_Lumpur, Asia/Colombo, Asia/Nicosia) is after `dueDate`. One function serves the dashboard, lists, detail pages and My Work |
+| Progress | done = COMPLETED; pending = total − done; blocked and overdue overlap; % = done ÷ total |
+
+---
+
+## 6. Trade-offs (architecture decisions)
+
+Each decision is written as a short Architecture Decision Record: **context → options → decision → consequences → with more time or a larger team.**
+
+### ADR-1 · Modular monolith vs separate frontend, backend and services
+- **Context:** 4-day build, ~100 users, one developer.
+- **Options:** separate SPA + API service; microservices per module; **one Next.js app with module boundaries in code**.
+- **Decision:** one deployable. Domain services live in `src/server/<module>`, with a single shared core.
+- **Consequences:** one build, one deploy, one log stream, and no network calls between modules. Downside: the UI and API scale together.
+- **With more time or a larger team:** the service boundaries are already clean enough to extract the API into its own service, add a background-job queue (for AI and notifications), and give each module an owning team.
+
+### ADR-2 · PostgreSQL vs a document store
+- **Context:** hierarchies, dependency graphs, audit trails and cross-module reporting.
+- **Options:** MongoDB; SQLite; **PostgreSQL**.
+- **Decision:** PostgreSQL with foreign keys, unique keys and `CHECK` constraints, accessed through Prisma.
+- **Consequences:** integrity rules are enforced by the database, and multi-row workflows are atomic. Downside: migrations must be managed.
+- **With more time or a larger team:** use real query plans to tune; add read replicas or materialised views for analytics; add PostgreSQL row-level security as a second safety net (ADR-7).
+
+### ADR-3 · Advisory AI vs autonomous routing
+- **Context:** an AI that assigns work on its own could bypass "only a manager or HR can assign", and it can be wrong.
+- **Options:** auto-assign; **suggest only**.
+- **Decision:** the AI classifies every new request and recommends a team and person. The assigner applies it with one click through the normal, permission-checked assign action. AI output is validated against live IDs; text in a request is treated as untrusted data, not instructions; the AI service runs under a separate user with no access to the app's secrets.
+- **Consequences:** it can't escalate privileges, and failures fall back to manual triage. Downside: one extra click, and accuracy isn't measured yet.
+- **With more time or a larger team:** log accept/override decisions to measure accuracy; build a labelled test set; once accuracy is proven, consider auto-assigning low-risk categories.
+
+### ADR-4 · Snapshot checklists vs live templates
+- **Context:** HR will edit templates while hires are mid-onboarding.
+- **Options:** checklist tasks point at live template tasks; **copy (snapshot) at assignment**.
+- **Decision:** snapshot, keeping `templateId`, `templateVersion` and `sourceTaskKey` for traceability. Templates are versioned; assigning against an outdated version returns 409.
+- **Consequences:** existing hires' deadlines and tasks never change underneath them. Downside: fixing a template mistake doesn't reach hires already assigned.
+- **With more time or a larger team:** an explicit, audited "apply template v3 to these checklists" migration with a preview.
+
+### ADR-5 · Derived Blocked/Overdue vs stored statuses
+- **Context:** blocked and overdue change with the passage of time and with other tasks' progress.
+- **Options:** store them and refresh with a scheduler or triggers; **compute when read**.
+- **Decision:** store only NOT_STARTED / IN_PROGRESS / COMPLETED; compute BLOCKED and overdue with shared pure functions.
+- **Consequences:** never stale, no cron job, easy to unit-test (time zones, daylight saving). Downside: computed on every read, which is cheap at this scale.
+- **With more time or a larger team:** at large scale, a materialised "task health" view or SQL-side overdue calculation for dashboards; scheduled reminders would then become a real need.
+
+### ADR-6 · Concurrency: versions plus a per-checklist row lock vs SERIALIZABLE everywhere
+- **Context:** double clicks, two managers assigning at once, two owners finishing the last two tasks at once.
+- **Options:** SERIALIZABLE transactions with retry loops; **optimistic versions plus targeted row locks**.
+- **Decision:** every state change includes `expectedVersion` and updates only if it still matches; onboarding task changes lock their parent checklist row.
+- **Consequences:** easy to reason about and covered by concurrency tests; contention is limited to a single checklist.
+- **With more time or a larger team:** apply the same guarantees to reporting-line edits (currently a documented gap); add an idempotency key for POST requests.
+
+### ADR-7 · Application-layer authorization vs PostgreSQL row-level security
+- **Context:** three roles, record-level scoping, two exceptions (assignee, task owner).
+- **Options:** PostgreSQL row-level security policies; **one policy module in the app**.
+- **Decision:** a single TypeScript policy module that generates the per-record checks and the query filters.
+- **Consequences:** readable, unit-tested, and lists and detail pages share the same rules. Downside: a new query that bypasses the policy module would bypass security, which is mitigated by keeping database access only in `src/server` and by negative integration tests.
+- **With more time or a larger team:** add row-level security as a second safety net, and a lint rule that bans Prisma calls outside the services.
+
+### ADR-8 · Stateless sealed cookie + `sessionVersion` vs a session table
+- **Context:** sessions must be revocable (disable, logout) without running a session store.
+- **Decision:** an encrypted cookie holds `{userId, sessionVersion}`; incrementing the version revokes every existing session for that user.
+- **Consequences:** no extra infrastructure, and revocation is immediate. Downside: logout signs the user out on all devices. This decision came from a real bug (DEBUG_LOG Bug 1).
+- **With more time or a larger team:** a per-device session table with a "sign out other devices" option, plus SSO (OIDC) instead of local passwords.
+
+### ADR-9 · Where the AI runs: inline call vs isolated bridge
+- **Context:** the deployment uses the owner's ChatGPT/Codex plan, so those credentials must never be readable by the web app or by a prompt-injected model.
+- **Options:** call the provider API from the app with an API key; **an isolated local bridge with its own login**.
+- **Decision:** the provider is chosen with `AI_PROVIDER` (`openai`, `anthropic` or `codex`). The deployment runs the Codex bridge: a separate Linux user and login, reached over a unix socket. Each call is a fresh, read-only `codex exec` with shell, browser and plugins disabled and a JSON output schema.
+- **Consequences:** clear isolation; switching to an API key is a configuration change. Downside: a 6–10 s cold start per suggestion (hidden by running it in the background after submit), and usage counts against a personal plan.
+- **With more time or a larger team:** a platform API key with organisation billing and usage dashboards, a proper job queue, and retries with backoff.
+
+---
+
+## 7. Cross-cutting concerns
+
+| Concern | Approach |
+| --- | --- |
+| **Security** | Server-side authorization (§4); CSRF defence via the Origin check; HttpOnly + Secure + SameSite cookies; bcrypt; login throttling; strict input schemas; escaped rendering; `X-Frame-Options: DENY`, `nosniff`; no secrets in the repo; the AI process can't read app secrets |
+| **Privacy** | APIs return minimal DTOs (no password hashes, no session data; email only where the matrix allows). The AI sees only opaque IDs, names, departments and countries — no emails or HR fields. AI logs record only request ID, latency and outcome |
+| **Data integrity** | Foreign keys and `CHECK` constraints; append-only event tables; no hard deletes; multi-row writes are atomic |
+| **Time** | UTC timestamps for events; calendar dates plus an IANA timezone for deadlines; the dashboard uses one `asOf` time for the whole page |
+| **Observability** | One-line JSON logs with a request ID on every error response; journald via systemd; `/api/health` for uptime checks |
+| **Performance and scale** | Indexes per query (§2.2); pagination everywhere (max 100); at ~100 users the overdue/blocked derivation is in-memory per owner — see ADR-5 for scaling |
+| **Accessibility and UX** | Labelled inputs, visible focus, keyboard-usable controls, status shown as text (not colour alone), charts paired with value tables, verified at 390 px with no horizontal scroll |
+| **Testing** | 31 unit (pure policy, state, dates, DAG, AI validation) · 26 integration (HTTP against a fresh database per run, including concurrency and negative-access cases, with a fake AI bridge) · 5 Playwright end-to-end · seed verification (22 checks). Evidence in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
+
+---
+
+## 8. Seed data design
+
+Fictitious, realistic data, generated by `prisma/seed.ts`:
+- **People:** 100 employees, 25 per country; 2 HR Admins, 12 Managers, 86 Employees; 75 active / 20 on probation / 5 on notice.
+- **Requests:** 40, evenly spread across the 5 categories, 5 statuses and 4 priorities. Each request's history is consistent with the state machine, and 8 have comment threads.
+- **Onboarding:** 8 recent hires who joined 30–55 days ago. Checklists are 10 tasks (Standard) or 12 (Engineering), in mixed states with real overdue and blocked tasks.
+- **Repeatable:** fixed IDs per fixture mean re-running never duplicates anything. The script needs an explicit opt-in flag. `prisma/verify-seed.ts` checks the whole data contract.
+
+---
+
+## 9. Risks and limitations
+
+- No reopening, cancelling or deleting of requests or tasks; no attachments, notifications, password reset or SSO.
+- Template fixes don't reach existing checklists (ADR-4).
+- Two HR admins editing reporting lines at the same moment could each pass the cycle check (ADR-6).
+- Logout signs the user out everywhere (ADR-8).
+- AI accuracy hasn't been measured; suggestions take 6–10 s and use a personal ChatGPT plan's limits (ADR-9).
+- "Recently joined" and overdue figures move with the calendar by design. The seed's reference date is today, so a review weeks later will show older hires.
+
+## 10. Repository map
+
+```text
+src/app/(auth)/login                    sign-in page
+src/app/(app)/{dashboard,requests,my-work,onboarding,templates,employees}
+src/app/api/**                          thin route handlers → services
+src/server/auth                         session, current user, permissions (policy), throttle
+src/server/{people,requests,onboarding,dashboard,ai}   domain services
+src/components/{ui,layout,requests,onboarding,dashboard,employees}
+prisma/{schema.prisma,migrations,seed.ts,verify-seed.ts}
+tests/{unit,integration,e2e}            node:test + Playwright; per-run test database
+deploy/                                 systemd units, nginx vhost, Codex bridge, runbook
+```
+
+Dependencies (pinned): Next.js 16.4.5, React 19.3.1, Prisma 6.19.3, zod 4.6.7, iron-session 8.0.4, bcryptjs 3.0.3, Tailwind 3.4.19, TypeScript 5.9.3, Playwright 1.63.0. Selected UI components were adapted from an earlier project; see [docs/REUSE_MANIFEST.md](docs/REUSE_MANIFEST.md).
 
 ## 11. Decision log
 
 | Date | Decision |
 | --- | --- |
-| 2026-11-09 | Assessment PDF not supplied; build pack used as specification. |
-| 2026-11-09 | Seed targets Section 7 figures (stricter than Section 1 minimums). |
-| 2026-11-09 | Onboarding completion concurrency: `SELECT … FOR UPDATE` on Onboarding row. |
-| 2026-11-09 | npm registry initially blocked by session egress policy; unblocked by the candidate the same day. Versions resolved as in §2.2. |
-| 2026-11-09 | Tests use `node:test` instead of Vitest (fewer dependencies; ran before install). |
-| 2026-11-09 | AI adapter uses structured outputs instead of forced tool use (SDK 1.x; sampling params removed). |
-| 2026-11-09 | Logout increments `sessionVersion` (fix for BUG-1, copied cookie still valid after logout). |
-| 2026-11-09 | Prisma refuses `migrate reset` from an AI agent without user consent; test runner uses a fresh per-run database instead of resetting. |
-| 2026-11-09 | Added narrow lookups `/employees/manager-options`, `/onboarding/unassigned-employees`; RouterDTO gains `suggestedAssigneeName`. |
-| 2026-11-09 | Added OpenAI provider (`AI_PROVIDER=openai`, Responses API, platform API key). A personal ChatGPT/Codex subscription login was considered and rejected: it would put one person's session tokens on a shared server and serve other users from a personal plan; OpenAI's Codex docs direct programmatic use to API keys. |
-| 2026-11-09 | Candidate chose to use their ChatGPT/Codex plan on the VPS. Implemented as an isolated bridge with a dedicated device-auth login (not a copy of the existing agents' token, which would break their refresh-token rotation); app talks to it over a unix socket and never sees the tokens. Bridge 45 s timeout, ≤2 concurrent runs. |
-| 2026-11-09 | AI suggestion stored per request (auto-run after submit via `after()`), shown to assigners with the suggested person — closes the gap where only the requester saw the recommendation. |
-| 2026-11-09 | Onboarding owner eligibility excludes the hire themself; request assignee cannot be the requester. |
+| 2026-11-09 | v1 design committed before code (`75e0644`), working from an internal build specification. When the assessment PDF arrived it was checked line by line; its requirements take precedence. |
+| 2026-11-09 | Onboarding completion concurrency handled with `SELECT … FOR UPDATE` on the Onboarding row (ADR-6). |
+| 2026-11-09 | Tests use `node:test` + Playwright; each integration run creates its own database and never resets one. |
+| 2026-11-09 | Logout increments `sessionVersion` (fix for DEBUG_LOG Bug 1) (ADR-8). |
+| 2026-11-09 | Login throttle keyed on the trusted client IP plus a per-account cap (found in code review). |
+| 2026-11-09 | Pluggable AI provider (`anthropic`, `openai`, `codex`); deployed on an isolated Codex bridge with its own login (ADR-9). |
+| 2026-11-09 | AI suggestion stored per request and run automatically after submit; the recommended person is shown to assigners. This closes the brief's "recommends which team/person to assign" requirement (ADR-3). |
+| 2026-11-09 | Router prompt amended after the first live run returned no person for clear IT cases: recommend someone from the suggested team, preferring the requester's country. |
+| 2026-11-09 | Onboarding owner can't be the hire themself; a request's assignee can't be its requester. |

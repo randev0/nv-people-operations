@@ -36,7 +36,7 @@ export async function logout(userId: string) {
 }
 ```
 
-Incrementing the version makes every previously issued cookie for that user fail the version check. Disabling an account already used the same mechanism. Trade-off, documented in ARCHITECTURE §4/§9: logout signs the user out on all devices.
+Incrementing the version makes every previously issued cookie for that user fail the version check. Disabling an account already used the same mechanism. Trade-off, documented in ARCHITECTURE §4.2 and ADR-8: logout signs the user out on all devices.
 
 **Verification:** integration test A01 now replays the copied pre-logout cookie and asserts 401. It passes in three consecutive `npm run test:integration` runs (23/23). Before the fix, the same request returned 200 (output above).
 

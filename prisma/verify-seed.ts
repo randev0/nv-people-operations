@@ -1,5 +1,5 @@
 /**
- * Asserts the seed contract (build pack §7). Exits non-zero on any failure.
+ * Asserts the seed contract (seed requirements; see ARCHITECTURE §8). Exits non-zero on any failure.
  * Read-only: safe to run against any environment's database.
  */
 import { PrismaClient } from "@prisma/client";

@@ -262,7 +262,7 @@ export async function transitionTask(
   if (!owner) throw forbidden("Only the task owner can update this task.");
 
   const result = await db.$transaction(async (tx) => {
-    // Serialize all task transitions within one checklist (see ARCHITECTURE §6).
+    // Serialize all task transitions within one checklist (see ARCHITECTURE §5.2 and ADR-6).
     await tx.$queryRaw`SELECT id FROM "Onboarding" WHERE id = ${task.onboardingId}::uuid FOR UPDATE`;
     const t = await tx.onboardingTask.findUniqueOrThrow({ where: { id }, include: taskInclude });
     if (t.version !== input.expectedVersion) throw staleVersion();

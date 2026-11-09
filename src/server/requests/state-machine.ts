@@ -1,6 +1,6 @@
 /**
  * Pure service-request state machine. No I/O; used by the service and by the
- * DTO layer to compute allowedActions. See ARCHITECTURE.md §5.
+ * DTO layer to compute allowedActions. See ARCHITECTURE.md §5.1.
  */
 export type RequestStatus = "SUBMITTED" | "ASSIGNED" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
 export type TransitionAction = "START" | "RESOLVE" | "CLOSE";
