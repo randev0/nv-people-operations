@@ -172,3 +172,9 @@
   - Employees: cards show how many of their requests are being worked on, how many assigned requests are started, tasks on time and overdue share. Insights is personal: "My requests" (open / to confirm / closed), "My work" (open tasks / overdue / requests to handle) and, for new hires, "My onboarding" with progress; every figure opens the matching filtered list. No organisation or team reporting is shown to employees.
   - Insights panels in a row now share their height.
 - Tests: employee and IT-owner tests now expect the tab bar and personal Insights (and that its Open figure equals the list it opens); axe covers 27 pages, 0 violations. e2e 21/21 twice.
+
+## 2026-11-10 — No company name or slogan in the product UI
+- Request: this is an assessment build, so the UI should not carry the company's name or its "Every NEXTar, set up to fly" line.
+- Login: the hero is now product-led: "Requests answered. / New hires ready.", one sentence on what the workspace does, and three feature rows (service requests with AI-suggested assignees, onboarding checklists with local-time deadlines, one view of the day). The dotted office map was dropped from the hero to keep it calm; the four office cities stay in the footer. Sign-in subtitle: "Use your work email to continue."
+- Sidebar subtitle "Next Ventures" → "HR workspace"; page meta description and a stylesheet comment no longer name the company. Everything else unchanged. Repository docs still name the assessment's company where they describe the brief.
+- e2e 21/21 (axe 0 violations).

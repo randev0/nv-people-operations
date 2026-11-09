@@ -9,7 +9,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "People Operations",
-  description: "Service requests and onboarding for Next Ventures (assessment build).",
+  description: "Service requests and employee onboarding (assessment build).",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -61,7 +61,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
           <BrandOrb />
           <div className="leading-tight">
             <p className="text-[15px] font-semibold tracking-[-0.03em]">People Ops</p>
-            <p className="text-[11px] text-muted-foreground">Next Ventures</p>
+            <p className="text-[11px] text-muted-foreground">HR workspace</p>
           </div>
         </div>
         <nav className="flex-1 space-y-5 overflow-y-auto px-2 pb-4">
