@@ -252,7 +252,7 @@ export type MyDashboard = Awaited<ReturnType<typeof myDashboard>>;
 /**
  * Today's compact cross-module line, scoped to what the viewer may see and open:
  * HR = organisation, managers = their direct reports, employees = themselves.
- * Same definition as the Insights tab and the request-list filter behind it. Wording
+ * Same definition as the request-list filter behind it (insight=new-hires-it). Wording
  * says "open IT equipment requests" only: an open request does not by itself mean
  * onboarding is blocked.
  */

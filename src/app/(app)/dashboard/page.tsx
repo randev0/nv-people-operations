@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight, Inbox, UserPlus } from "lucide-react";
 import { requireUser } from "@/server/auth/current-user";
 import { isHrAdmin, isManager } from "@/server/auth/permissions";
@@ -8,7 +9,7 @@ import { getOwnOnboardingId, listOnboardings } from "@/server/onboarding/service
 import { sp } from "@/server/page";
 import { Button } from "@/components/ui/button";
 import { CompactGreeting } from "@/components/dashboard/greeting";
-import { Insights } from "@/components/dashboard/insights";
+import { ManagerAtAGlance, OrgAtAGlance } from "@/components/dashboard/at-a-glance";
 import { ProgressRing } from "@/components/dashboard/brand-viz";
 import { WorkList, type WorkRow } from "@/components/dashboard/work-list";
 import { blockedReason } from "@/lib/onboarding-text";
@@ -25,32 +26,15 @@ type Me = Awaited<ReturnType<typeof requireUser>>;
 export default async function DashboardPage({ searchParams }: { searchParams: SP }) {
   const me = await requireUser();
   const raw = await searchParams;
-  const tab = sp(raw.tab) === "insights" ? "insights" : "today";
+  // The old Insights tab is now the "At a glance" section of this page.
+  if (sp(raw.tab) === "insights") redirect("/dashboard#at-a-glance");
   const showAll = sp(raw.queue) === "all";
   const now = new Date();
 
   return (
     <div className="mx-auto w-full max-w-[1280px]">
       <CompactGreeting firstName={me.name.split(" ")[0]} countryCode={me.countryCode} initialNow={now.toISOString()} />
-      <nav aria-label="Dashboard views" className="mb-5 flex gap-1 border-b">
-        {[
-          { key: "today", label: "Today", href: "/dashboard" },
-          { key: "insights", label: "Insights", href: "/dashboard?tab=insights" },
-        ].map((t) => (
-          <Link
-            key={t.key}
-            href={t.href}
-            aria-current={tab === t.key ? "page" : undefined}
-            className={cn(
-              "-mb-px rounded-t-md border-b-2 px-4 py-2 text-sm",
-              tab === t.key ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.label}
-          </Link>
-        ))}
-      </nav>
-      {tab === "insights" ? <Insights me={me} /> : await Today({ me, showAll, now })}
+      {await Today({ me, showAll, now })}
     </div>
   );
 }
@@ -272,12 +256,16 @@ async function Today({ me, showAll, now }: { me: Me; showAll: boolean; now: Date
             </section>
           ) : null}
 
-          <p className="text-xs text-muted-foreground">
-            Headcount, request charts and full onboarding figures are in{" "}
-            <Link href="/dashboard?tab=insights" className="rounded font-medium text-link hover:underline">Insights</Link>.
-          </p>
+          {hr || mgr ? (
+            <p className="text-xs text-muted-foreground">
+              Request charts and headcount are further down, under{" "}
+              <Link href="#at-a-glance" className="rounded font-medium text-link hover:underline">At a glance</Link>.
+            </p>
+          ) : null}
         </aside>
       </div>
+
+      {hr && org ? <OrgAtAGlance d={org} /> : mgr && mine ? <ManagerAtAGlance d={mine} /> : null}
     </>
   );
 }

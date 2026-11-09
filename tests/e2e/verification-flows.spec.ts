@@ -38,11 +38,10 @@ test.describe.serial("presentation verification flows", () => {
 
   test("2 · manager finds the unassigned team request, assigns it, sees the new state; filters survive the round trip", async ({ page }) => {
     await signIn(page, "manager.my@example.com");
-    // Today lists it as assignment work; the full "Needs assignment" view lives in Insights.
+    // Today lists it as assignment work; the "Unassigned" figure opens the team's list.
     await page.goto("/dashboard?queue=all");
     await expect(page.getByRole("listitem").filter({ hasText: TITLE }).getByRole("button", { name: /^Assign/ })).toBeVisible();
-    await page.getByRole("navigation", { name: "Dashboard views" }).getByRole("link", { name: "Insights" }).click();
-    await page.getByRole("link", { name: /Needs assignment/ }).click();
+    await page.getByRole("link", { name: /^Unassigned/ }).click();
     await expect(page).toHaveURL(/scope=team.*status=SUBMITTED|status=SUBMITTED.*scope=team/);
     await page.getByRole("row", { name: new RegExp(TITLE) }).getByRole("link", { name: TITLE }).click();
     await expect(page.getByRole("heading", { name: new RegExp(TITLE) })).toBeVisible();
@@ -60,57 +59,63 @@ test.describe.serial("presentation verification flows", () => {
     await expect(page.getByRole("row", { name: new RegExp(TITLE) })).toHaveCount(0); // no longer unassigned
   });
 
-  test("4 · HR opens the equipment queue and reaches the records behind the number", async ({ page }) => {
+  test("4 · HR follows the IT-equipment line to exactly the records behind it", async ({ page }) => {
     await signIn(page, "hr.admin@example.com");
-    await page.goto("/dashboard?tab=insights");
-    const queue = page.getByRole("region", { name: "New hires waiting on IT equipment" });
-    // Hires and requests are counted separately and both are stated.
-    const meta = await queue.getByText(/\d+ hires? · \d+ open requests?/).textContent();
-    const [hires, requests] = meta!.match(/\d+/g)!.map(Number);
-    expect(hires).toBeGreaterThan(0);
-    const items = queue.getByRole("listitem");
-    await expect(items).toHaveCount(requests);
-    // Longest wait first: waiting days never increase down the list.
-    const waits = (await items.allTextContents()).map((t) => Number(t.match(/(\d+) days?since/)![1]));
-    expect([...waits].sort((a, b) => b - a)).toEqual(waits);
-    // The title link opens that exact request.
-    const firstLink = items.first().getByRole("link").first();
+    const line = page.getByRole("region", { name: "IT equipment for new hires" });
+    // People and requests are counted separately and both are stated.
+    const text = (await line.innerText()).replace(/\s+/g, " ");
+    const m = text.match(/(\d+) (?:person|people) who joined in the last 60 days (?:has|have) (\d+) open IT equipment requests?/)!;
+    const requests = Number(m[2]);
+    expect(Number(m[1])).toBeGreaterThan(0);
+    await line.getByRole("link", { name: "Review requests" }).click();
+    await expect(page).toHaveURL(/insight=new-hires-it/);
+    await expect(page.getByText("New hires waiting on IT equipment:")).toBeVisible();
+    const rows = page.locator("table tbody tr");
+    await expect(rows).toHaveCount(requests);
+    for (const t of await rows.allInnerTexts()) expect(t).toContain("IT equipment");
+    // A row opens that exact request, and Back keeps the filter.
+    const firstLink = rows.first().getByRole("link").first();
     const title = (await firstLink.textContent())!.trim();
     await firstLink.click();
     await expect(page.getByRole("heading", { level: 1 })).toContainText(title);
     await page.getByRole("link", { name: "Back to requests" }).click();
     await expect(page).toHaveURL(/insight=new-hires-it/);
-    await expect(page.locator("table tbody tr")).toHaveCount(requests);
-    // The main button opens the same filtered list.
-    await page.goto("/dashboard?tab=insights");
-    await queue.getByRole("link", { name: /Open (this request|these \d+ requests)/ }).click();
-    await expect(page.getByText("New hires waiting on IT equipment:")).toBeVisible();
-    await expect(page.getByText(`${requests} request${requests === 1 ? "" : "s"}`, { exact: true })).toBeVisible();
   });
 
-  test("5 · HR Insights: overdue tasks near the top, metric links match their numbers", async ({ page }) => {
+  test("5 · HR dashboard: chase list in the first screen, every figure matches the list it opens, reporting below", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await signIn(page, "hr.admin@example.com");
-    await page.goto("/dashboard?tab=insights");
-    const overdue = page.getByRole("region", { name: "Most overdue onboarding tasks" });
-    const firstTask = overdue.getByRole("listitem").first();
-    await expect(firstTask).toBeInViewport();
-    // Next action opens the checklist at that task.
-    await firstTask.getByRole("link", { name: /Open in checklist/ }).click();
+    await expect(page.getByRole("navigation", { name: "Dashboard views" })).toHaveCount(0); // one page, no tabs
+    const firstTask = page.getByRole("region", { name: /^Onboarding to chase/ }).getByRole("listitem").first();
+    await expect(firstTask).toBeVisible();
+    await firstTask.getByRole("link", { name: /Open checklist/ }).click();
     await expect(page).toHaveURL(/\/onboarding\/[0-9a-f-]+#task-/);
+
+    const figure = async (name: RegExp) => {
+      await page.goto("/dashboard");
+      const l = page.getByRole("link", { name }).first();
+      const n = Number((await l.locator(":scope > span").nth(1).textContent())!.trim());
+      await l.click();
+      return n;
+    };
+    const count = (n: number) => page.getByText(n === 0 ? "No requests match these filters." : `${n} request${n === 1 ? "" : "s"}`, { exact: true });
+    await expect(count(await figure(/^Open requests/))).toBeVisible();
+    await expect(count(await figure(/^Unassigned/))).toBeVisible();
+    const overdue = await figure(/^Overdue tasks/);
+    await expect(page).toHaveURL(/\/onboarding\/overdue$/);
+    await expect(page.getByRole("main").getByRole("listitem")).toHaveCount(overdue);
+    await expect(count(await figure(/^Resolved, last 7 days/))).toBeVisible();
+
+    // Reporting required by the brief is on the same page, under "At a glance".
+    await page.goto("/dashboard");
+    const glance = page.getByRole("region", { name: "At a glance" });
+    for (const name of ["Open requests by status", "Open requests by category", "Headcount by office", "Request flow"]) {
+      await expect(glance.getByRole("region", { name })).toBeVisible();
+    }
+    // Old Insights links land on that section.
     await page.goto("/dashboard?tab=insights");
-    // "Open requests" number = rows in the list it opens.
-    const open = page.getByRole("link", { name: /^Open requests\s*\d+/ });
-    const n = Number(await open.locator(":scope > span").nth(1).textContent());
-    await open.click();
-    await expect(page.getByText(`${n} request${n === 1 ? "" : "s"}`, { exact: true })).toBeVisible();
-    await page.goto("/dashboard?tab=insights");
-    const resolved = page.getByRole("link", { name: /^Resolved, last 7 days\s*\d+/ });
-    const r = Number(await resolved.locator(":scope > span").nth(1).textContent());
-    await resolved.click();
-    await expect(page.getByText(r === 0 ? "No requests match these filters." : `${r} request${r === 1 ? "" : "s"}`, { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/dashboard#at-a-glance$/);
     // Office pins: keyboard focus reveals city and country.
-    await page.goto("/dashboard?tab=insights");
     const pin = page.getByRole("link", { name: /^Nicosia, Cyprus:/ });
     await expect(pin.getByRole("tooltip")).toHaveCSS("opacity", "0");
     await pin.focus();

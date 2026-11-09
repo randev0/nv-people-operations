@@ -24,7 +24,6 @@ test.describe.configure({ mode: "serial" });
 
 test("HR: clocks always visible; requests to assign by priority; chase list by days overdue; View all links", async ({ page }) => {
   await signIn(page, "hr.admin@example.com");
-  await expect(page.getByRole("link", { name: "Today" })).toHaveAttribute("aria-current", "page");
   const clocks = page.getByRole("list", { name: "Local time in each office" });
   await expect(clocks.getByRole("listitem")).toHaveCount(4);
   await expect(clocks).toContainText("Nicosia");
@@ -119,8 +118,7 @@ test("HR bulk-assigns two requests to one person and the counts update", async (
 
 test("Overdue figure opens the overdue task list with the same count; filters narrow it; employees are refused", async ({ page }) => {
   await signIn(page, "hr.admin@example.com");
-  await page.goto("/dashboard?tab=insights");
-  const card = page.getByRole("link", { name: /^Overdue onboarding tasks/ });
+  const card = page.getByRole("link", { name: /^Overdue tasks/ });
   const n = Number(await card.locator(":scope > span").nth(1).textContent());
   await card.click();
   await expect(page).toHaveURL(/\/onboarding\/overdue$/);
@@ -178,15 +176,12 @@ test("manager: only their team in the chase list and the equipment line", async 
   await expect(page).toHaveURL(/scope=team&insight=new-hires-it/);
 });
 
-test("nothing to act on: caught-up state with onward links; Insights reachable by keyboard", async ({ page }) => {
+test("nothing to act on: caught-up state with onward links; employees see no org reporting", async ({ page }) => {
   await signIn(page, "employee.cy@example.com");
   await expect(page.getByText("You're all caught up.")).toBeVisible();
   const attention = page.getByRole("region", { name: "Needs your attention" });
   await expect(attention.getByRole("link", { name: "Requests", exact: true })).toHaveAttribute("href", "/requests");
   await expect(attention.getByRole("link", { name: "Onboarding" })).toBeVisible();
-  const insights = page.getByRole("link", { name: "Insights", exact: true }).first();
-  await insights.focus();
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/tab=insights/);
-  await expect(page.getByRole("link", { name: "Insights", exact: true }).first()).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("region", { name: "At a glance" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /^My open requests/ })).toBeVisible();
 });
