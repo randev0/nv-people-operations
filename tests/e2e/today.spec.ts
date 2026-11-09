@@ -41,20 +41,21 @@ test("HR: clocks always visible; requests to assign by priority; chase list by d
   expect([...days].sort((a, b) => b - a)).toEqual(days);
   await expect(chase.first()).toContainText("Owner ");
 
-  // "View all" for requests opens the real list with the same count.
+  // "View all" for requests lists every one of them (same number as the Unassigned figure),
+  // and from there "Open in Requests" opens the filtered request list with the same count.
   const unassigned = await kpi(page, "Unassigned");
-  const viewAll = group(page, /^Requests to assign/).getByRole("link", { name: /^View all \d+ in Requests/ });
-  if (await viewAll.count()) {
-    await viewAll.click();
-    await expect(page).toHaveURL(/status=SUBMITTED/);
-    await expect(page.getByText(`${unassigned} request${unassigned === 1 ? "" : "s"}`, { exact: true })).toBeVisible();
-    await page.goto("/dashboard");
-  }
-  // "View all" for the chase list expands every overdue task, still most overdue first.
+  await group(page, /^Requests to assign/).getByRole("link", { name: /^View all \d+/ }).click();
+  await expect(page).toHaveURL(/queue=all/);
+  await expect(rowsOf(page, /^Requests to assign/)).toHaveCount(unassigned);
+  await group(page, /^Requests to assign/).getByRole("link", { name: "Open in Requests" }).click();
+  await expect(page).toHaveURL(/status=SUBMITTED/);
+  await expect(page.getByText(`${unassigned} request${unassigned === 1 ? "" : "s"}`, { exact: true })).toBeVisible();
+  // "View all" for the chase list opens the overdue task page with exactly that many tasks.
+  await page.goto("/dashboard");
   const chaseTotal = Number((await group(page, /^Onboarding to chase/).getByRole("heading").innerText()).match(/\((\d+)\)/)![1]);
   await group(page, /^Onboarding to chase/).getByRole("link", { name: /^View all/ }).click();
-  await expect(page).toHaveURL(/queue=all/);
-  await expect(rowsOf(page, /^Onboarding to chase/)).toHaveCount(chaseTotal);
+  await expect(page).toHaveURL(/\/onboarding\/overdue\?owner=others/);
+  await expect(page.getByRole("main").getByRole("listitem")).toHaveCount(chaseTotal);
 });
 
 test("HR assigns from the side sheet without leaving the dashboard", async ({ page }) => {
@@ -72,7 +73,17 @@ test("HR assigns from the side sheet without leaving the dashboard", async ({ pa
   await expect(trigger).toBeFocused();
 
   await trigger.click();
+  // Search narrows the list; the request's team is listed before everyone else.
   const select = sheet.getByLabel("Assign to");
+  await expect(select).toBeEnabled();
+  const groups = await select.locator("optgroup").evaluateAll((gs) => gs.map((g) => g.getAttribute("label")));
+  expect(groups.at(-1)).toBe("Everyone else");
+  expect(groups.some((g) => /team \(handles this category\)$/.test(g ?? ""))).toBe(true);
+  const total = await select.locator("option").count();
+  await sheet.getByLabel("Find a person").fill("IT");
+  await expect(sheet.getByText(/^\d+ matching (person|people)$/)).toBeVisible();
+  expect(await select.locator("option").count()).toBeLessThan(total);
+  await sheet.getByLabel("Find a person").fill("");
   await expect(select).toBeEnabled();
   const value = await select.locator("option").nth(1).getAttribute("value");
   const name = (await select.locator("option").nth(1).innerText()).split(" — ")[0];
@@ -83,6 +94,49 @@ test("HR assigns from the side sheet without leaving the dashboard", async ({ pa
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect.poll(() => kpi(page, "Unassigned")).toBe(before - 1);
   await expect(rowsOf(page, /^Requests to assign/).filter({ hasText: title })).toHaveCount(0);
+});
+
+test("HR bulk-assigns two requests to one person and the counts update", async ({ page }) => {
+  await signIn(page, "hr.admin@example.com");
+  const before = await kpi(page, "Unassigned");
+  test.skip(before < 2, "needs two unassigned requests");
+  await page.goto("/dashboard?queue=all");
+  const rows = rowsOf(page, /^Requests to assign/);
+  await rows.nth(0).getByRole("checkbox").check();
+  await rows.nth(1).getByRole("checkbox").check();
+  const bar = page.getByRole("region", { name: "Bulk assign" });
+  await expect(bar).toContainText("2 selected");
+  const select = bar.getByLabel("Assign selected requests to");
+  await expect(select).toBeEnabled();
+  const option = select.locator("option").nth(1);
+  const name = (await option.innerText()).replace(/ \([A-Z]{2}\)$/, "");
+  await select.selectOption((await option.getAttribute("value"))!);
+  await bar.getByRole("button", { name: "Assign 2" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Assigned 2 of 2 requests" })).toContainText(`to ${name}`);
+  await page.goto("/dashboard");
+  await expect.poll(() => kpi(page, "Unassigned")).toBe(before - 2);
+});
+
+test("Overdue figure opens the overdue task list with the same count; filters narrow it; employees are refused", async ({ page }) => {
+  await signIn(page, "hr.admin@example.com");
+  await page.goto("/dashboard?tab=insights");
+  const card = page.getByRole("link", { name: /^Overdue onboarding tasks/ });
+  const n = Number(await card.locator(":scope > span").nth(1).textContent());
+  await card.click();
+  await expect(page).toHaveURL(/\/onboarding\/overdue$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Overdue onboarding tasks" })).toBeVisible();
+  const items = page.getByRole("main").getByRole("listitem");
+  await expect(items).toHaveCount(n);
+  const days = (await items.allInnerTexts()).map((t) => Number(t.match(/^(\d+) days? overdue/)![1]));
+  expect([...days].sort((a, b) => b - a)).toEqual(days);
+  await page.getByLabel("State").selectOption("BLOCKED");
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page).toHaveURL(/state=BLOCKED/);
+  for (const t of await items.allInnerTexts()) expect(t).toContain("Waiting for");
+  await page.context().clearCookies();
+  await signIn(page, "employee.cy@example.com");
+  await page.goto("/onboarding/overdue");
+  await expect(page.getByText(/available to HR admins and managers/)).toBeVisible();
 });
 
 test("IT owner: own work in rule order, action confirms and refreshes, title opens the record", async ({ page }) => {
@@ -102,7 +156,7 @@ test("IT owner: own work in rule order, action confirms and refreshes, title ope
     .poll(async () => {
       const row = rows.filter({ has: page.locator(`a[href="${href}"]`) });
       return (await row.count()) === 0 ? "gone" : (await row.getByRole("button").innerText()).trim();
-    })
+    }, { timeout: 15_000, message: "row should leave the list or offer its next step after the refresh" })
     .not.toBe(before);
   const link = rows.first().getByRole("link").first();
   const next = (await link.innerText()).trim();

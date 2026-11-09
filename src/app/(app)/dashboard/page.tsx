@@ -132,14 +132,14 @@ async function Today({ me, showAll, now }: { me: Me; showAll: boolean; now: Date
         { label: "Open requests", value: org.openRequests.total, hint: "Not yet resolved", href: "/requests?scope=all&status=OPEN" },
         { label: "Unassigned", value: org.openRequests.byStatus.find((s) => s.status === "SUBMITTED")?.count ?? 0, hint: "Waiting for an assignee", href: "/requests?scope=all&status=SUBMITTED", tone: "warning" as const },
         { label: "Onboarding", value: org.onboarding.activeHires, hint: "New hires with tasks left", href: "/onboarding?progress=active" },
-        { label: "Overdue tasks", value: org.onboarding.overdueTasks, hint: "Past due, hire's local date", href: "/dashboard?tab=insights#overdue-tasks", tone: "danger" as const },
+        { label: "Overdue tasks", value: org.onboarding.overdueTasks, hint: "Past due, hire's local date", href: "/onboarding/overdue", tone: "danger" as const },
       ]
     : mine?.team
       ? [
           { label: "Team open requests", value: mine.team.openRequests, hint: "Your direct reports", href: "/requests?scope=team&status=OPEN" },
           { label: "Unassigned", value: mine.team.unassigned, hint: "Team requests to assign", href: "/requests?scope=team&status=SUBMITTED", tone: "warning" as const },
           { label: "Team onboarding", value: mine.team.activeOnboardings, hint: "Checklists in progress", href: "/onboarding?progress=active" },
-          { label: "Team overdue tasks", value: mine.team.overdueTasks, hint: "Past due, hire's local date", href: "/onboarding?progress=active", tone: "danger" as const },
+          { label: "Team overdue tasks", value: mine.team.overdueTasks, hint: "Past due, hire's local date", href: "/onboarding/overdue", tone: "danger" as const },
         ]
       : mine
         ? [
@@ -181,7 +181,7 @@ async function Today({ me, showAll, now }: { me: Me; showAll: boolean; now: Date
                   title="Requests to assign"
                   count={toAssign.length}
                   note="Urgent and high priority first, then oldest"
-                  viewAll={toAssign.length > PER_GROUP ? { href: `/requests?scope=${scope}&status=SUBMITTED`, label: `View all ${toAssign.length} in Requests` } : undefined}
+                  viewAll={toAssign.length > PER_GROUP && !showAll ? { href: "/dashboard?queue=all#to-assign", label: `View all ${toAssign.length}` } : showAll ? { href: `/requests?scope=${scope}&status=SUBMITTED`, label: "Open in Requests" } : undefined}
                 >
                   <WorkList rows={take(toAssign).map(toRow)} emptyState={null} />
                 </Group>
@@ -203,7 +203,7 @@ async function Today({ me, showAll, now }: { me: Me; showAll: boolean; now: Date
                   title={hr ? "Onboarding to chase" : "Team onboarding to chase"}
                   count={chase.length}
                   note="Overdue tasks owned by others, most overdue first"
-                  viewAll={chase.length > PER_GROUP && !showAll ? { href: "/dashboard?queue=all#chase", label: `View all ${chase.length}` } : undefined}
+                  viewAll={chase.length > PER_GROUP ? { href: "/onboarding/overdue?owner=others", label: `View all ${chase.length}` } : undefined}
                 >
                   <WorkList rows={take(chaseRows)} emptyState={null} />
                 </Group>

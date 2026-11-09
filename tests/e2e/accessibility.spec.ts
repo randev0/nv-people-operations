@@ -86,10 +86,11 @@ test("keyboard only: dialog traps focus and Escape returns focus to the trigger"
 const PAGES: { who: string; paths: string[] }[] = [
   { who: "employee.my@example.com", paths: ["/dashboard", "/requests", "/requests/new", "/my-work", "/onboarding"] },
   { who: "manager.my@example.com", paths: ["/dashboard", "/dashboard?tab=insights", "/requests?scope=team", "/onboarding", "/employees"] },
-  { who: "hr.admin@example.com", paths: ["/dashboard", "/dashboard?tab=insights", "/dashboard?queue=all", "/requests?scope=all", "/templates", "/onboarding/assign", "/employees"] },
+  { who: "hr.admin@example.com", paths: ["/dashboard", "/dashboard?tab=insights", "/dashboard?queue=all", "/onboarding/overdue", "/requests?scope=all", "/templates", "/onboarding/assign", "/employees"] },
 ];
 
 test("automated accessibility scan (axe, WCAG 2.1 A/AA): no serious or critical violations", async ({ page }) => {
+  test.setTimeout(120_000); // 20 pages × sign-in + scan
   const report: string[] = [];
   const scanned: string[] = ["/login"];
   await page.goto("/login");
@@ -113,6 +114,6 @@ test("automated accessibility scan (axe, WCAG 2.1 A/AA): no serious or critical 
   }
   console.log(`axe scanned ${scanned.length} pages`);
   console.log(report.length ? report.join("\n") : "axe: no violations");
-  expect(scanned.length).toBeGreaterThanOrEqual(19);
+  expect(scanned.length).toBeGreaterThanOrEqual(20);
   expect(report.filter((l) => / (serious|critical) /.test(l))).toEqual([]);
 });

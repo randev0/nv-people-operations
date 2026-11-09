@@ -75,6 +75,8 @@ export function AssignmentPanel({ request, suggestion, onAssigned }: { request: 
   const [options, setOptions] = useState<Option[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [assigneeId, setAssigneeId] = useState("");
+  const [search, setSearch] = useState("");
+  const [teamDeptId, setTeamDeptId] = useState<string | null>(null);
   /** A person picked from the AI suggestion before the eligible list has loaded. */
   const [wanted, setWanted] = useState<string | null>(null);
   const canAssign = request.allowedActions.includes("ASSIGN") || request.allowedActions.includes("REASSIGN");
@@ -82,7 +84,11 @@ export function AssignmentPanel({ request, suggestion, onAssigned }: { request: 
   useEffect(() => {
     if (!canAssign) return;
     api<Option[]>(`/requests/${request.id}/assignee-options`).then(setOptions).catch((e) => setLoadError(errorText(e)));
-  }, [canAssign, request.id]);
+    // The category's default team is listed first (e.g. IT for IT equipment).
+    api<{ id: string; defaultDepartmentId: string | null }[]>("/request-categories")
+      .then((cats) => setTeamDeptId(cats.find((c) => c.id === request.categoryId)?.defaultDepartmentId ?? null))
+      .catch(() => setTeamDeptId(null));
+  }, [canAssign, request.id, request.categoryId]);
 
   // Apply a suggestion chosen while the list was still loading, once it arrives.
   if (wanted && options) {
@@ -91,6 +97,16 @@ export function AssignmentPanel({ request, suggestion, onAssigned }: { request: 
   }
 
   const chosen = options?.find((o) => o.id === assigneeId);
+  const eligible = options?.filter((o) => o.id !== request.assignee?.id) ?? [];
+  const needle = search.trim().toLowerCase();
+  const matches = (o: Option) => !needle || `${o.name} ${o.department.name} ${o.countryCode}`.toLowerCase().includes(needle) || o.id === assigneeId;
+  const aiId = suggestion.suggestedAssignee?.id;
+  const groups = [
+    { label: "Suggested by AI", people: eligible.filter((o) => o.id === aiId) },
+    { label: `${eligible.find((o) => o.department.id === teamDeptId)?.department.name ?? "Request's"} team (handles this category)`, people: eligible.filter((o) => o.id !== aiId && o.department.id === teamDeptId) },
+    { label: "Everyone else", people: eligible.filter((o) => o.id !== aiId && o.department.id !== teamDeptId) },
+  ].map((g) => ({ ...g, people: g.people.filter(matches) })).filter((g) => g.people.length);
+  const shown = groups.reduce((n, g) => n + g.people.length, 0);
 
   function applyPerson(id: string, list: Option[]) {
     if (list.some((o) => o.id === id)) setAssigneeId(id);
@@ -123,11 +139,29 @@ export function AssignmentPanel({ request, suggestion, onAssigned }: { request: 
                 run("assign", () => api(`/requests/${request.id}/assign`, { method: "POST", body: { assigneeId, expectedVersion: request.version } }), `Assigned to ${name}`, () => onAssigned?.(name));
               }}
             >
+              <Label htmlFor="assignee-search">Find a person</Label>
+              <input
+                id="assignee-search"
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Name, team or country"
+                aria-describedby="assignee-count"
+                className="h-9 w-full rounded-md border border-input bg-card px-3 placeholder:text-muted-foreground"
+                disabled={!options}
+              />
+              <p id="assignee-count" className="text-xs text-muted-foreground" aria-live="polite">
+                {options ? (needle ? `${shown} matching ${shown === 1 ? "person" : "people"}` : "Suggested person and the request's team are listed first") : "Loading people…"}
+              </p>
               <Label htmlFor="assignee">{request.status === "SUBMITTED" ? "Assign to" : "Reassign to"}</Label>
               <select id="assignee" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className="h-9 w-full rounded-md border border-input bg-card px-2" disabled={!options}>
-                <option value="">{options ? "Choose a person" : "Loading people…"}</option>
-                {options?.filter((o) => o.id !== request.assignee?.id).map((o) => (
-                  <option key={o.id} value={o.id}>{o.name} — {o.department.name} ({o.countryCode})</option>
+                <option value="">{options ? (shown ? "Choose a person" : "Nobody matches the search") : "Loading people…"}</option>
+                {groups.map((g) => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.people.map((o) => (
+                      <option key={o.id} value={o.id}>{o.name} — {o.department.name} ({o.countryCode})</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               <Button type="submit" size="sm" className="w-full" disabled={!assigneeId || pending !== null}>

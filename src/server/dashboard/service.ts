@@ -284,3 +284,26 @@ export async function overdueToChase(actor: Actor, asOf: Date = new Date()) {
   const all = await overdueTasks(asOf);
   return all.filter((t) => t.ownerId !== actor.id && (isHrAdmin(actor) || t.hireManagerId === actor.id));
 }
+
+/**
+ * Every overdue onboarding task the viewer may read, most overdue first (HR: all
+ * checklists; managers: their direct reports'). Employees use My Work instead → 403.
+ * Same overdue rule and ordering as the dashboard figures that link here.
+ */
+export async function overdueTasksInScope(
+  actor: Actor,
+  q: { countryCode?: string; department?: string; state?: "BLOCKED" | "NOT_STARTED" | "IN_PROGRESS"; othersOnly?: boolean } = {},
+  asOf: Date = new Date(),
+) {
+  if (!isHrAdmin(actor) && !isManager(actor)) throw forbidden("The overdue task list is available to HR admins and managers.");
+  const all = (await overdueTasks(asOf)).filter((t) => (isHrAdmin(actor) || t.hireManagerId === actor.id) && (!q.othersOnly || t.ownerId !== actor.id));
+  const rows = all.filter(
+    (t) => (!q.countryCode || t.countryCode === q.countryCode) && (!q.department || t.department === q.department) && (!q.state || t.state === q.state),
+  );
+  return {
+    rows,
+    total: all.length,
+    departments: [...new Set(all.map((t) => t.department))].sort(),
+    asOf: asOf.toISOString(),
+  };
+}

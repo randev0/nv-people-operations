@@ -117,7 +117,7 @@ export async function Insights({ me }: { me: Actor }) {
             <Progress value={tasksTotal ? Math.round((tasksDone / tasksTotal) * 100) : 0} aria-label="Tasks complete across active checklists" />
             <span className="text-xs text-muted-foreground">{tasksDone} of {tasksTotal} tasks complete across active checklists</span>
           </Kpi>
-          <Kpi label="Overdue onboarding tasks" value={d.onboarding.overdueTasks} href="#overdue-tasks" linkLabel="Jump to the overdue task list." tone={d.onboarding.overdueTasks ? "danger" : undefined}>
+          <Kpi label="Overdue onboarding tasks" value={d.onboarding.overdueTasks} href="/onboarding/overdue" linkLabel="Open the list of overdue onboarding tasks." tone={d.onboarding.overdueTasks ? "danger" : undefined}>
             <span className="text-xs text-muted-foreground">
               In {plural(overdueChecklists, "checklist")}; due date passed in the hire&apos;s local time
             </span>
@@ -138,13 +138,11 @@ export async function Insights({ me }: { me: Actor }) {
               <>
                 <ul className="divide-y">{overdue.slice(0, OVERDUE_VISIBLE).map(overdueRow)}</ul>
                 {overdue.length > OVERDUE_VISIBLE ? (
-                  <details className="group border-t">
-                    <summary className="cursor-pointer list-none px-5 py-2.5 text-xs font-medium text-link hover:underline [&::-webkit-details-marker]:hidden">
-                      <span className="group-open:hidden">Show {overdue.length - OVERDUE_VISIBLE} more overdue tasks</span>
-                      <span className="hidden group-open:inline">Show fewer</span>
-                    </summary>
-                    <ul className="divide-y border-t">{overdue.slice(OVERDUE_VISIBLE).map(overdueRow)}</ul>
-                  </details>
+                  <p className="border-t px-5 py-2.5 text-right">
+                    <Link href="/onboarding/overdue" className="inline-flex items-center gap-1 rounded text-sm font-medium text-link hover:underline">
+                      View all {overdue.length} overdue tasks <ArrowRight className="h-4 w-4" aria-hidden />
+                    </Link>
+                  </p>
                 ) : null}
               </>
             )}

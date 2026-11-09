@@ -45,6 +45,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         description={isHrAdmin(me) ? "Progress by new hire. Open a row to see the checklist." : "Your direct reports' checklists. Open a row to see the tasks."}
         actions={
           <>
+            <Button asChild variant="outline"><Link href="/onboarding/overdue">Overdue tasks</Link></Button>
             {own ? <Button asChild variant="outline"><Link href={`/onboarding/${own}`}>My checklist</Link></Button> : null}
             {isHrAdmin(me) ? <Button asChild><Link href="/onboarding/assign">Assign checklist</Link></Button> : null}
           </>
