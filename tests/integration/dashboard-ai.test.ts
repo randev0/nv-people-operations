@@ -149,3 +149,20 @@ test("stored suggestion: provider failure is recorded, request still usable", as
   assert.match(s.failureReason, /unavailable/);
   assert.equal((await emp.get(`/requests/${created.json.data.id}`)).json.data.status, "SUBMITTED");
 });
+
+test("AI02 timeout: a provider that never answers → 503 within the app's timeout; stored suggestion FAILED; request usable", async () => {
+  const c = await login("it.owner@example.com"); // fresh AI budget
+  const started = Date.now();
+  const r = await c.post("/ai/route-request", { title: "[ai-slow] Printer jammed", description: "The level 3 printer jams on every page." });
+  const ms = Date.now() - started;
+  assert.equal(r.status, 503);
+  assert.equal(r.json.error.code, "AI_UNAVAILABLE");
+  assert.ok(ms < 8000, `gave up after ${ms} ms (app timeout 2 s in tests, provider would take 10 s)`);
+
+  const cat = await db.requestCategory.findUniqueOrThrow({ where: { code: "FACILITIES" } });
+  const created = await c.post("/requests", { title: "[ai-slow] Printer jammed", description: "The level 3 printer jams on every page.", categoryId: cat.id, priority: "MEDIUM" });
+  assert.equal(created.status, 201, "submission never waits on the AI");
+  const s = await waitForSuggestion(c, created.json.data.id);
+  assert.equal(s.status, "FAILED");
+  assert.match(s.failureReason, /did not answer in time/);
+});

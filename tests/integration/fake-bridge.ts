@@ -5,6 +5,7 @@
  * Behaviour is chosen by the request title:
  *   "[ai-fail] …"    → provider failure
  *   "[ai-invalid] …" → output with invented IDs (must be rejected by the app)
+ *   "[ai-slow] …"    → never answers in time (app timeout path)
  *   anything else     → valid suggestion built from the allowed options in the prompt
  */
 import http from "node:http";
@@ -27,6 +28,10 @@ export function startFakeBridge(socketPath: string): Promise<http.Server> {
       const { user } = JSON.parse(raw) as { user: string };
       const title = /Title: (.*)/.exec(user)?.[1] ?? "";
       if (title.startsWith("[ai-fail]")) return send({ ok: false, reason: "PROVIDER_ERROR" });
+      if (title.startsWith("[ai-slow]")) {
+        setTimeout(() => { if (!res.writableEnded && !res.destroyed) send({ ok: false, reason: "TIMEOUT" }); }, 10_000);
+        return;
+      }
       const opts = JSON.parse(user.split("\n")[1]) as Options;
       if (title.startsWith("[ai-invalid]")) {
         return send({ ok: true, output: { categoryId: "invented", priority: "HIGH", suggestedDepartmentId: "nope", suggestedAssigneeId: "admin", explanation: "x" } });

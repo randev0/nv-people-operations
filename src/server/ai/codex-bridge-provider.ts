@@ -3,14 +3,15 @@ import http from "node:http";
 import { outputJsonSchema } from "./schema";
 import type { ProviderResult, RoutingProvider } from "./provider";
 
-const TIMEOUT_MS = 50_000; // the bridge kills codex at 45 s
+/** The bridge kills codex at 45 s; the app gives up slightly later. Overridable for tests. */
+const timeoutMs = () => Number(process.env.CODEX_BRIDGE_TIMEOUT_MS ?? 50_000);
 
 type Requester = (socketPath: string, body: string) => Promise<{ status: number; text: string }>;
 
 const unixRequest: Requester = (socketPath, body) =>
   new Promise((resolve, reject) => {
     const req = http.request(
-      { socketPath, path: "/suggest", method: "POST", headers: { "content-type": "application/json", "content-length": Buffer.byteLength(body) }, timeout: TIMEOUT_MS },
+      { socketPath, path: "/suggest", method: "POST", headers: { "content-type": "application/json", "content-length": Buffer.byteLength(body) }, timeout: timeoutMs() },
       (res) => {
         let text = "";
         res.on("data", (c) => (text += c));

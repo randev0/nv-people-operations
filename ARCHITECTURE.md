@@ -683,8 +683,8 @@ Each decision is written as a short Architecture Decision Record: **context → 
 | **Time** | UTC timestamps for events; calendar dates plus an IANA timezone for deadlines; the dashboard uses one `asOf` time for the whole page |
 | **Observability** | One-line JSON logs with a request ID on every error response; journald via systemd; `/api/health` for uptime checks |
 | **Performance and scale** | Indexes per query (§2.2); pagination everywhere (max 100); at ~100 users the overdue/blocked derivation is in-memory per owner — see ADR-5 for scaling |
-| **Accessibility and UX** | Labelled inputs, visible focus, keyboard-usable controls, status shown as text (not colour alone), charts paired with value tables, verified at 390 px with no horizontal scroll |
-| **Testing** | 31 unit (pure policy, state, dates, DAG, AI validation) · 26 integration (HTTP against a fresh database per run, including concurrency and negative-access cases, with a fake AI bridge) · 5 Playwright end-to-end · seed verification (22 checks). Evidence in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
+| **Accessibility and UX** | Labelled inputs, visible focus, skip link, keyboard-usable controls and dialogs (focus trapped, Escape returns focus), status shown as text (not colour alone), charts paired with value tables; automated axe WCAG 2.1 A/AA scan of 15 pages with zero violations; verified at 390 px with no horizontal scroll |
+| **Testing** | 33 unit (pure policy, state, dates, DAG, deadline labels, AI validation and providers) · 27 integration (HTTP against a fresh database per run: concurrency, negative access, AI failure/invalid/timeout paths via a fake AI bridge) · 8 Playwright end-to-end (core flows, keyboard-only use, dialog focus trap, axe WCAG 2.1 AA scan of 15 pages, 390 px layout) · seed verification (22 checks). Evidence in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
 
 ---
 

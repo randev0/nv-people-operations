@@ -34,6 +34,7 @@ const env: NodeJS.ProcessEnv = {
   DEMO_PASSWORD: process.env.DEMO_PASSWORD ?? "integration-test-password",
   ANTHROPIC_API_KEY: "", // no real AI provider in tests
   AI_PROVIDER: "codex", // points at the deterministic fake bridge below
+  CODEX_BRIDGE_TIMEOUT_MS: "2000", // short app-side timeout so the "[ai-slow]" case finishes quickly
   CODEX_BRIDGE_SOCKET: join(mkdtempSync(join(tmpdir(), "po-fake-bridge-")), "bridge.sock"),
   LOGIN_RATE_LIMIT: "10",
   AI_RATE_LIMIT_PER_MINUTE: "3",

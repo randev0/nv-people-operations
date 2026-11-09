@@ -76,10 +76,10 @@ The seed is idempotent. It only creates missing fixture rows (deterministic IDs 
 | `npm run lint` / `typecheck` | ESLint, `tsc --noEmit` |
 | `npm run test:unit` | Pure logic: dates/timezones, DAG validation, permissions, state machine, AI output validation (`node:test`) |
 | `npm run test:integration` | Requires `npm run build`. Creates a fresh test database, migrates, seeds, starts the app on :3100 and runs HTTP tests covering authorization, workflows, concurrency, dashboard and AI fallbacks. |
-| `npm run test:e2e` | Same harness with Playwright: full request lifecycle, task unblocking, template editor, role navigation, 390 px layout |
+| `npm run test:e2e` | Same harness with Playwright: full request lifecycle with AI routing, task unblocking, template editor, role navigation, keyboard-only use, axe accessibility scan, 390 px layout |
 | `npm run db:generate` / `db:migrate` / `db:seed` / `db:verify-seed` | Prisma client, `migrate deploy`, seed, seed assertions |
 
-Latest local results (2026-11-09): lint 0 problems, typecheck 0 errors, unit 24/24, integration 24/24, e2e 5/5, seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
+Latest local results (2026-11-09): lint 0 problems, typecheck 0 errors, unit 33/33, integration 27/27, e2e 8/8 (including keyboard-only and axe WCAG 2.1 AA scans), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 
 ## Deployment
 
