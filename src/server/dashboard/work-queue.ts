@@ -56,6 +56,8 @@ export type WorkItem = {
   person: string;
   /** One short line: why it is here and why now. */
   reason: string;
+  /** Row label when more specific than the rule name (request priority). */
+  badge?: string;
   /** Shown only when someone other than the viewer is (or should be) responsible. */
   owner: string | null;
   href: string;
@@ -65,6 +67,7 @@ export type WorkItem = {
 
 const DAY = 86_400_000;
 const PRIORITY_RANK = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
+const PRIORITY_NAME = { URGENT: "Urgent", HIGH: "High", MEDIUM: "Medium", LOW: "Low" } as const;
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const dayLabel = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 const ago = (from: Date, now: Date) => {
@@ -104,7 +107,7 @@ export async function workQueue(actor: Actor, now: Date = new Date()): Promise<W
     const blocking = blocks ? `blocks ${plural(blocks, "task")}` : "";
     const reason =
       tier === "OVERDUE"
-        ? [`Overdue ${plural(overdueDays, "day")} (${due})`, blocking].filter(Boolean).join(" · ")
+        ? [`Due ${dayLabel(dto.dueDate)}`, blocking].filter(Boolean).join(" · ")
         : tier === "BLOCKING"
           ? `${blocking[0].toUpperCase()}${blocking.slice(1)} in this checklist · ${due}`
           : tier === "DUE_SOON"
@@ -118,6 +121,7 @@ export async function workQueue(actor: Actor, now: Date = new Date()): Promise<W
       title: t.title,
       person: t.onboarding.employee.name,
       reason,
+      badge: tier === "OVERDUE" ? `${plural(overdueDays, "day")} overdue` : undefined,
       owner: null,
       href: `/onboarding/${t.onboardingId}#task-${t.id}`,
       action: { kind: "task", id: t.id, action: act, version: t.version, label: act === "START" ? "Start" : "Mark complete" },
@@ -134,7 +138,8 @@ export async function workQueue(actor: Actor, now: Date = new Date()): Promise<W
       tier: urgent ? "URGENT" : "REQUEST",
       title: r.title,
       person: r.requester.name,
-      reason: `${r.priority === "URGENT" ? "Urgent · " : r.priority === "HIGH" ? "High priority · " : ""}assigned to you, opened ${ago(r.createdAt, now)}${r.status === "IN_PROGRESS" ? " · in progress" : ""}`,
+      reason: `${r.category.name} · assigned to you, opened ${ago(r.createdAt, now)}${r.status === "IN_PROGRESS" ? " · in progress" : ""}`,
+      badge: `${PRIORITY_NAME[r.priority]} priority`,
       owner: null,
       href: `/requests/${r.id}`,
       action: { kind: "request", id: r.id, action: act, version: r.version, label: act === "START" ? "Start work" : "Mark resolved" },
@@ -150,7 +155,8 @@ export async function workQueue(actor: Actor, now: Date = new Date()): Promise<W
       tier: urgent ? "URGENT" : "REQUEST",
       title: r.title,
       person: r.requester.name,
-      reason: `${r.priority === "URGENT" ? "Urgent · " : r.priority === "HIGH" ? "High priority · " : ""}nobody assigned, opened ${ago(r.createdAt, now)}`,
+      reason: `${r.category.name} · opened ${ago(r.createdAt, now)}, nobody assigned yet`,
+      badge: `${PRIORITY_NAME[r.priority]} priority`,
       owner: null, // the reason already says nobody is assigned
       href: `/requests/${r.id}`,
       action: { kind: "link", href: `/requests/${r.id}`, label: "Assign" },

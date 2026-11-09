@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, errorText } from "@/lib/api";
+import { AssignSheet } from "./assign-sheet";
 import { cn } from "@/lib/utils";
 
 /** Serializable shape of a server WorkItem (see src/server/dashboard/work-queue.ts). */
@@ -21,7 +22,8 @@ export type WorkRow = {
   action:
     | { kind: "task"; id: string; action: "START" | "COMPLETE"; version: number; label: string }
     | { kind: "request"; id: string; action: "START" | "RESOLVE" | "CLOSE"; version: number; label: string }
-    | { kind: "link"; href: string; label: string };
+    | { kind: "link"; href: string; label: string }
+    | { kind: "assign"; id: string; label: string };
 };
 
 // Coral only for problems (overdue); amber for things holding others up or high priority; neutral otherwise.
@@ -48,9 +50,16 @@ export function WorkList({ rows, emptyState }: { rows: WorkRow[]; emptyState: Re
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [done, setDone] = useState<string | null>(null);
   const confirmRef = useRef<HTMLDivElement>(null);
+  const [sheet, setSheet] = useState<{ id: string; title: string } | null>(null);
+  const sheetTrigger = useRef<HTMLButtonElement | null>(null);
+
+  function confirm(message: string) {
+    setDone(message);
+    requestAnimationFrame(() => confirmRef.current?.focus());
+  }
 
   async function act(row: WorkRow) {
-    if (row.action.kind === "link") return;
+    if (row.action.kind === "link" || row.action.kind === "assign") return;
     const a = row.action;
     setPending(row.key);
     setErrors((e) => ({ ...e, [row.key]: "" }));
@@ -98,7 +107,18 @@ export function WorkList({ rows, emptyState }: { rows: WorkRow[]; emptyState: Re
                 {errors[row.key] ? <p role="alert" className="mt-1 text-sm text-destructive">{errors[row.key]}</p> : null}
               </div>
               <div className="shrink-0">
-                {row.action.kind === "link" ? (
+                {row.action.kind === "assign" ? (
+                  <Button
+                    size="sm"
+                    aria-haspopup="dialog"
+                    onClick={(e) => {
+                      sheetTrigger.current = e.currentTarget;
+                      setSheet({ id: (row.action as { id: string }).id, title: row.title });
+                    }}
+                  >
+                    {row.action.label}<span className="sr-only">: {row.title}</span>
+                  </Button>
+                ) : row.action.kind === "link" ? (
                   <Button asChild size="sm" variant="outline">
                     <Link href={row.action.href}>
                       {row.action.label}<span className="sr-only">: {row.title}</span> <ArrowRight aria-hidden />
@@ -115,6 +135,23 @@ export function WorkList({ rows, emptyState }: { rows: WorkRow[]; emptyState: Re
           ))}
         </ol>
       )}
+      {sheet ? (
+        <AssignSheet
+          requestId={sheet.id}
+          title={sheet.title}
+          open
+          onOpenChange={(o) => {
+            if (o) return;
+            setSheet(null);
+            // Closed without assigning: return focus to the button that opened the sheet.
+            requestAnimationFrame(() => sheetTrigger.current?.focus());
+          }}
+          onAssigned={(message) => {
+            setSheet(null);
+            confirm(message);
+          }}
+        />
+      ) : null}
     </>
   );
 }

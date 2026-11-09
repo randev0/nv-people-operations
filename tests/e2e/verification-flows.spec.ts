@@ -40,8 +40,8 @@ test.describe.serial("presentation verification flows", () => {
     await signIn(page, "manager.my@example.com");
     // Today lists it as assignment work; the full "Needs assignment" view lives in Insights.
     await page.goto("/dashboard?queue=all");
-    await expect(page.getByRole("listitem").filter({ hasText: TITLE }).getByRole("link", { name: /^Assign/ })).toBeVisible();
-    await page.getByRole("link", { name: "Insights" }).click();
+    await expect(page.getByRole("listitem").filter({ hasText: TITLE }).getByRole("button", { name: /^Assign/ })).toBeVisible();
+    await page.getByRole("navigation", { name: "Dashboard views" }).getByRole("link", { name: "Insights" }).click();
     await page.getByRole("link", { name: /Needs assignment/ }).click();
     await expect(page).toHaveURL(/scope=team.*status=SUBMITTED|status=SUBMITTED.*scope=team/);
     await page.getByRole("row", { name: new RegExp(TITLE) }).getByRole("link", { name: TITLE }).click();

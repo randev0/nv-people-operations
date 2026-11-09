@@ -128,9 +128,10 @@ async function overdueTasks(asOf: Date) {
     where: { status: { not: "COMPLETED" }, dueDate: { lt: new Date(`${addCalendarDays(asOf.toISOString().slice(0, 10), 1)}T00:00:00Z`) } },
     select: {
       id: true, title: true, status: true, dueDate: true, dueDay: true,
+      ownerId: true,
       owner: { select: { name: true } },
       department: { select: { name: true } },
-      onboarding: { select: { id: true, timezone: true, employee: { select: { name: true, countryCode: true } } } },
+      onboarding: { select: { id: true, timezone: true, employee: { select: { name: true, countryCode: true, managerId: true } } } },
       prerequisites: { select: { prerequisiteTask: { select: { title: true, status: true, department: { select: { name: true } } } } } },
     },
   });
@@ -143,6 +144,8 @@ async function overdueTasks(asOf: Date) {
       return {
         id: t.id,
         title: t.title,
+        ownerId: t.ownerId,
+        hireManagerId: t.onboarding.employee.managerId,
         onboardingId: t.onboarding.id,
         hire: t.onboarding.employee.name,
         countryCode: t.onboarding.employee.countryCode,
@@ -269,4 +272,15 @@ export async function todayInsight(actor: Actor, asOf: Date = new Date()) {
     oldestDays: oldest,
     href: scope === "org" ? "/requests?scope=all&insight=new-hires-it" : scope === "team" ? "/requests?scope=team&insight=new-hires-it" : `/requests?scope=mine&status=OPEN${itCategory ? `&categoryId=${itCategory.id}` : ""}`,
   } as const;
+}
+
+/**
+ * Overdue onboarding tasks the viewer should chase (follow up with the owner), most
+ * overdue first: HR = all checklists, managers = their direct reports' checklists,
+ * others = none. Tasks the viewer owns are excluded: those are already in their own work.
+ */
+export async function overdueToChase(actor: Actor, asOf: Date = new Date()) {
+  if (!isHrAdmin(actor) && !isManager(actor)) return [];
+  const all = await overdueTasks(asOf);
+  return all.filter((t) => t.ownerId !== actor.id && (isHrAdmin(actor) || t.hireManagerId === actor.id));
 }

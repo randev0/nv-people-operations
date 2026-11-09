@@ -23,7 +23,7 @@ function useAction() {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  async function run(label: string, fn: () => Promise<unknown>, done: string) {
+  async function run(label: string, fn: () => Promise<unknown>, done: string, onDone?: () => void) {
     setPending(label);
     setError(null);
     setSuccess(null);
@@ -31,6 +31,7 @@ function useAction() {
       await fn();
       setSuccess(done);
       router.refresh();
+      onDone?.();
     } catch (err) {
       setError(errorText(err));
       if (err instanceof ApiError && err.code === "STALE_VERSION") router.refresh();
@@ -69,7 +70,7 @@ export function RequestHeaderActions({ request }: { request: ReqInfo }) {
 }
 
 /** Sidebar: current assignee, assignment form for assigners, and the AI routing suggestion. */
-export function AssignmentPanel({ request, suggestion }: { request: ReqInfo; suggestion: Suggestion }) {
+export function AssignmentPanel({ request, suggestion, onAssigned }: { request: ReqInfo; suggestion: Suggestion; onAssigned?: (assigneeName: string) => void }) {
   const { pending, error, success, run } = useAction();
   const [options, setOptions] = useState<Option[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -118,7 +119,8 @@ export function AssignmentPanel({ request, suggestion }: { request: ReqInfo; sug
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!assigneeId) return;
-                run("assign", () => api(`/requests/${request.id}/assign`, { method: "POST", body: { assigneeId, expectedVersion: request.version } }), `Assigned to ${chosen?.name ?? "the selected person"}`);
+                const name = chosen?.name ?? "the selected person";
+                run("assign", () => api(`/requests/${request.id}/assign`, { method: "POST", body: { assigneeId, expectedVersion: request.version } }), `Assigned to ${name}`, () => onAssigned?.(name));
               }}
             >
               <Label htmlFor="assignee">{request.status === "SUBMITTED" ? "Assign to" : "Reassign to"}</Label>
