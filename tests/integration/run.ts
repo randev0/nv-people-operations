@@ -8,6 +8,10 @@
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { startFakeBridge } from "./fake-bridge";
 
 const testUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.DATABASE_URL;
@@ -28,11 +32,25 @@ const env: NodeJS.ProcessEnv = {
   APP_URL: `http://localhost:${PORT}`,
   ALLOW_ASSESSMENT_SEED: "true",
   DEMO_PASSWORD: process.env.DEMO_PASSWORD ?? "integration-test-password",
-  ANTHROPIC_API_KEY: "", // AI provider is never called by integration tests
+  ANTHROPIC_API_KEY: "", // no real AI provider in tests
+  AI_PROVIDER: "codex", // points at the deterministic fake bridge below
+  CODEX_BRIDGE_SOCKET: join(mkdtempSync(join(tmpdir(), "po-fake-bridge-")), "bridge.sock"),
   LOGIN_RATE_LIMIT: "10",
   AI_RATE_LIMIT_PER_MINUTE: "3",
 };
 (env as Record<string, string>).NODE_ENV = "production";
+
+/**
+ * Async child process. The runner hosts the fake AI bridge in-process, so the test
+ * child must NOT be started with spawnSync (that blocks the event loop and the
+ * bridge never answers — see WORKLOG 2026-11-09).
+ */
+function runAsync(cmd: string, args: string[], extraEnv: Record<string, string> = {}, shell = false): Promise<number> {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { env: { ...env, ...extraEnv }, stdio: "inherit", shell });
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+}
 
 function run(cmd: string, args: string[]) {
   const r = spawnSync(cmd, args, { env, stdio: "inherit" });
@@ -53,6 +71,15 @@ async function main() {
 }
 
 async function runSuite() {
+  const bridge = await startFakeBridge(env.CODEX_BRIDGE_SOCKET!);
+  try {
+    await runSuiteInner();
+  } finally {
+    bridge.close();
+  }
+}
+
+async function runSuiteInner() {
   run("npx", ["prisma", "migrate", "deploy"]);
   run("npx", ["tsx", "prisma/seed.ts"]);
   const server = spawn("npx", ["next", "start", "-p", String(PORT)], { env, stdio: ["ignore", "pipe", "pipe"], detached: true });
@@ -71,17 +98,16 @@ async function runSuite() {
     const e2e = process.argv.includes("--e2e");
     const files = process.argv.slice(2).filter((a) => a !== "--e2e");
     if (e2e) {
-      const t = spawnSync("npx", ["playwright", "test", ...files], { env: { ...env, BASE_URL: `http://localhost:${PORT}` }, stdio: "inherit" });
-      process.exitCode = t.status ?? 1;
+      process.exitCode = await runAsync("npx", ["playwright", "test", ...files], { BASE_URL: `http://localhost:${PORT}` });
       return;
     }
     if (!files.length) files.push("tests/integration");
-    const t = spawnSync("npx", ["tsx", "--test", "--test-concurrency=1", ...files.map((f) => (f.endsWith(".ts") ? f : `${f}/*.test.ts`))], {
-      env: { ...env, BASE_URL: `http://localhost:${PORT}` },
-      stdio: "inherit",
-      shell: true,
-    });
-    process.exitCode = t.status ?? 1;
+    process.exitCode = await runAsync(
+      "npx",
+      ["tsx", "--test", "--test-concurrency=1", ...files.map((f) => (f.endsWith(".ts") ? f : `${f}/*.test.ts`))],
+      { BASE_URL: `http://localhost:${PORT}` },
+      true,
+    );
   } finally {
     try {
       process.kill(-server.pid!, "SIGTERM");

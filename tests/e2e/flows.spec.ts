@@ -15,7 +15,7 @@ async function signOut(page: Page) {
   await page.waitForURL("**/login");
 }
 
-test("request lifecycle across employee, manager, IT owner (AI unavailable keeps the draft)", async ({ page }) => {
+test("request lifecycle with AI routing (draft suggestion + assigner suggestion) across employee, manager, IT owner", async ({ page }) => {
   const title = `E2E monitor flicker ${Date.now()}`;
   await signIn(page, "employee.my@example.com");
   await page.getByRole("link", { name: "Requests", exact: true }).click();
@@ -23,10 +23,11 @@ test("request lifecycle across employee, manager, IT owner (AI unavailable keeps
   await page.getByLabel("Title").fill(title);
   await page.getByLabel("Description").fill("My external monitor flickers every few seconds since this morning.");
   await page.getByRole("button", { name: "Suggest routing" }).click();
-  await expect(page.getByText("Suggestion unavailable")).toBeVisible();
+  await expect(page.getByText("Deterministic test suggestion")).toBeVisible();
+  await page.getByRole("button", { name: "Apply category & priority" }).click();
+  await expect(page.getByLabel("Category")).toHaveValue(/.+/);
+  await expect(page.getByLabel("Priority")).toHaveValue("HIGH");
   await expect(page.getByLabel("Title")).toHaveValue(title);
-  await page.getByLabel("Category").selectOption({ label: "IT equipment" });
-  await page.getByLabel("Priority").selectOption("HIGH");
   await page.getByRole("button", { name: "Submit request" }).click();
   await expect(page.getByRole("heading", { name: new RegExp(title) })).toBeVisible();
   await expect(page.getByText("Submitted", { exact: true }).first()).toBeVisible();
@@ -35,6 +36,11 @@ test("request lifecycle across employee, manager, IT owner (AI unavailable keeps
 
   await signIn(page, "manager.my@example.com");
   await page.goto(url);
+  // Stored suggestion generated after submit is visible to the assigner, with a person.
+  const ai = page.getByRole("region", { name: "AI routing suggestion" });
+  await expect(ai.getByText("Deterministic test suggestion")).toBeVisible({ timeout: 15000 });
+  await ai.getByRole("button", { name: /^Use .* as assignee$/ }).click();
+  await expect(page.getByLabel("Assign to")).not.toHaveValue("");
   const opt = await page.getByLabel("Assign to").locator("option", { hasText: "Priya Ismail" }).getAttribute("value");
   await page.getByLabel("Assign to").selectOption(opt!);
   await page.getByRole("button", { name: "Assign", exact: true }).click();

@@ -5,13 +5,17 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { api, ApiError, errorText } from "@/lib/api";
+import { AiSuggestionPanel, type Suggestion } from "@/components/requests/ai-suggestion-panel";
 
 type Option = { id: string; name: string; countryCode: string; department: { id: string; name: string } };
-type Props = { request: { id: string; version: number; status: string; allowedActions: string[]; assigneeId: string | null } };
+type Props = {
+  request: { id: string; version: number; status: string; allowedActions: string[]; assigneeId: string | null; categoryId: string; priority: string };
+  suggestion: Suggestion;
+};
 
 const LABEL: Record<string, string> = { START: "Start work", RESOLVE: "Mark resolved", CLOSE: "Close request" };
 
-export function RequestActions({ request }: Props) {
+export function RequestActions({ request, suggestion }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,15 +43,33 @@ export function RequestActions({ request }: Props) {
     }
   }
 
+  const aiPanel = (
+    <AiSuggestionPanel
+      requestId={request.id}
+      initial={suggestion}
+      currentCategoryId={request.categoryId}
+      currentPriority={request.priority}
+      onUsePerson={canAssign ? (id) => {
+        if (options?.some((o) => o.id === id)) setAssigneeId(id);
+        else setError("The suggested person is not an eligible assignee for this request.");
+      } : undefined}
+    />
+  );
+
   if (!canAssign && transitions.length === 0) {
     return (
-      <section className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-        No workflow actions are available to you on this request. You can still comment.
-      </section>
+      <>
+        {aiPanel}
+        <section className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+          No workflow actions are available to you on this request. You can still comment.
+        </section>
+      </>
     );
   }
 
   return (
+    <>
+    {aiPanel}
     <section className="space-y-3 rounded-lg border bg-card p-4" aria-label="Request actions">
       <h2 className="font-medium">Actions</h2>
       {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
@@ -80,5 +102,6 @@ export function RequestActions({ request }: Props) {
         </div>
       ) : null}
     </section>
+    </>
   );
 }

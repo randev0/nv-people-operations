@@ -71,6 +71,10 @@ export async function createRequest(actor: Actor, input: CreateRequestInput): Pr
 }
 
 /** Loads a request the actor may read, or throws 404 (no disclosure). */
+export async function loadReadableRequest(actor: Actor, id: string): Promise<RequestRow> {
+  return loadReadable(actor, id);
+}
+
 async function loadReadable(actor: Actor, id: string): Promise<RequestRow> {
   const r = await db.serviceRequest.findUnique({ where: { id }, include: requestInclude });
   if (!r || !canReadRequest(actor, r)) throw notFound("Request");

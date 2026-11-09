@@ -50,6 +50,12 @@ enum TaskStatus {
   COMPLETED
 }
 
+enum AiSuggestionStatus {
+  PENDING
+  READY
+  FAILED
+}
+
 enum RequestEventKind {
   CREATED
   ASSIGNED
@@ -65,13 +71,14 @@ model Country {
 }
 
 model Department {
-  id                 String              @id @default(uuid()) @db.Uuid
-  name               String              @unique @db.VarChar(80)
-  isActive           Boolean             @default(true)
-  users              User[]
-  categories         RequestCategory[]
-  templateTasks      TemplateTask[]
-  onboardingTasks    OnboardingTask[]
+  id              String                @id @default(uuid()) @db.Uuid
+  name            String                @unique @db.VarChar(80)
+  isActive        Boolean               @default(true)
+  users           User[]
+  categories      RequestCategory[]
+  templateTasks   TemplateTask[]
+  onboardingTasks OnboardingTask[]
+  aiSuggestions   RequestAiSuggestion[]
 }
 
 model User {
@@ -94,18 +101,19 @@ model User {
   createdAt        DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime         @updatedAt @db.Timestamptz(3)
 
-  requestsSubmitted   ServiceRequest[]     @relation("Requester")
-  requestsAssigned    ServiceRequest[]     @relation("Assignee")
+  requestsSubmitted   ServiceRequest[]      @relation("Requester")
+  requestsAssigned    ServiceRequest[]      @relation("Assignee")
   comments            RequestComment[]
-  requestEventsActed  RequestEvent[]       @relation("EventActor")
-  requestEventsPrev   RequestEvent[]       @relation("EventPrevAssignee")
-  requestEventsNew    RequestEvent[]       @relation("EventNewAssignee")
+  requestEventsActed  RequestEvent[]        @relation("EventActor")
+  requestEventsPrev   RequestEvent[]        @relation("EventPrevAssignee")
+  requestEventsNew    RequestEvent[]        @relation("EventNewAssignee")
   templatesCreated    OnboardingTemplate[]
-  onboarding          Onboarding?          @relation("OnboardingEmployee")
-  onboardingsAssigned Onboarding[]         @relation("OnboardingAssigner")
+  onboarding          Onboarding?           @relation("OnboardingEmployee")
+  onboardingsAssigned Onboarding[]          @relation("OnboardingAssigner")
   ownedTasks          OnboardingTask[]
   taskEvents          TaskEvent[]
   aiUsage             AiUsageBucket[]
+  aiSuggestedFor      RequestAiSuggestion[] @relation("AiSuggestedAssignee")
 
   @@index([managerId])
   @@index([countryCode, employmentStatus])
@@ -113,39 +121,60 @@ model User {
 }
 
 model RequestCategory {
-  id                  String           @id @default(uuid()) @db.Uuid
-  code                String           @unique
-  name                String           @db.VarChar(80)
-  defaultDepartmentId String           @db.Uuid
-  defaultDepartment   Department       @relation(fields: [defaultDepartmentId], references: [id], onDelete: Restrict)
+  id                  String                @id @default(uuid()) @db.Uuid
+  code                String                @unique
+  name                String                @db.VarChar(80)
+  defaultDepartmentId String                @db.Uuid
+  defaultDepartment   Department            @relation(fields: [defaultDepartmentId], references: [id], onDelete: Restrict)
   requests            ServiceRequest[]
+  aiSuggestions       RequestAiSuggestion[]
 }
 
 model ServiceRequest {
-  id          String          @id @default(uuid()) @db.Uuid
-  number      Int             @unique @default(autoincrement())
-  title       String          @db.VarChar(160)
-  description String          @db.VarChar(5000)
-  categoryId  String          @db.Uuid
-  category    RequestCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  priority    Priority
-  status      RequestStatus   @default(SUBMITTED)
-  requesterId String          @db.Uuid
-  requester   User            @relation("Requester", fields: [requesterId], references: [id], onDelete: Restrict)
-  assigneeId  String?         @db.Uuid
-  assignee    User?           @relation("Assignee", fields: [assigneeId], references: [id], onDelete: Restrict)
-  version     Int             @default(1)
-  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
-  resolvedAt  DateTime?       @db.Timestamptz(3)
-  closedAt    DateTime?       @db.Timestamptz(3)
-  comments    RequestComment[]
-  events      RequestEvent[]
+  id           String               @id @default(uuid()) @db.Uuid
+  number       Int                  @unique @default(autoincrement())
+  title        String               @db.VarChar(160)
+  description  String               @db.VarChar(5000)
+  categoryId   String               @db.Uuid
+  category     RequestCategory      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  priority     Priority
+  status       RequestStatus        @default(SUBMITTED)
+  requesterId  String               @db.Uuid
+  requester    User                 @relation("Requester", fields: [requesterId], references: [id], onDelete: Restrict)
+  assigneeId   String?              @db.Uuid
+  assignee     User?                @relation("Assignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  version      Int                  @default(1)
+  createdAt    DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime             @updatedAt @db.Timestamptz(3)
+  resolvedAt   DateTime?            @db.Timestamptz(3)
+  closedAt     DateTime?            @db.Timestamptz(3)
+  comments     RequestComment[]
+  events       RequestEvent[]
+  aiSuggestion RequestAiSuggestion?
 
   @@index([requesterId, createdAt])
   @@index([assigneeId, status])
   @@index([status, categoryId])
   @@index([priority])
+}
+
+/// Advisory AI routing suggestion stored per request (generated after submit).
+/// Never changes the request itself; assigners read it when choosing an assignee.
+model RequestAiSuggestion {
+  requestId             String             @id @db.Uuid
+  request               ServiceRequest     @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  status                AiSuggestionStatus @default(PENDING)
+  categoryId            String?            @db.Uuid
+  category              RequestCategory?   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  priority              Priority?
+  suggestedDepartmentId String?            @db.Uuid
+  suggestedDepartment   Department?        @relation(fields: [suggestedDepartmentId], references: [id], onDelete: Restrict)
+  suggestedAssigneeId   String?            @db.Uuid
+  suggestedAssignee     User?              @relation("AiSuggestedAssignee", fields: [suggestedAssigneeId], references: [id], onDelete: Restrict)
+  explanation           String?            @db.VarChar(300)
+  failureReason         String?            @db.VarChar(40)
+  createdAt             DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime           @updatedAt @db.Timestamptz(3)
 }
 
 model RequestComment {

@@ -79,6 +79,32 @@ function selectProvider(): RoutingProvider {
   return p === "openai" ? openaiProvider() : p === "codex" ? codexBridgeProvider() : anthropicProvider();
 }
 
+export type RoutingFailure = "UNCONFIGURED" | "TIMEOUT" | "PROVIDER_ERROR" | "NO_STRUCTURED_OUTPUT" | "INVALID_OUTPUT";
+
+/**
+ * Core routing call shared by the draft-time endpoint and the stored per-request
+ * suggestion. No rate limiting and no writes here; callers handle both.
+ */
+export async function suggestRouting(
+  subject: { requesterId: string; countryCode: string },
+  input: { title: string; description: string },
+  logId: string,
+  provider: RoutingProvider = selectProvider(),
+): Promise<{ ok: true; suggestion: RouterDTO } | { ok: false; reason: RoutingFailure }> {
+  const ctx = await loadRoutingContext(subject.requesterId);
+  const started = Date.now();
+  const result = await provider.suggest(SYSTEM_PROMPT, buildUserPrompt(ctx, input, subject.countryCode));
+  const latencyMs = Date.now() - started;
+  if (!result.ok) {
+    console.info(JSON.stringify({ event: "ai.route", requestId: logId, latencyMs, outcome: result.reason }));
+    return { ok: false, reason: result.reason };
+  }
+  const suggestion = validateSuggestion(result.output, ctx);
+  console.info(JSON.stringify({ event: "ai.route", requestId: logId, latencyMs, outcome: suggestion ? "OK" : "INVALID_OUTPUT" }));
+  return suggestion ? { ok: true, suggestion } : { ok: false, reason: "INVALID_OUTPUT" };
+}
+
+/** Draft-time suggestion for the person writing the request (POST /api/ai/route-request). */
 export async function routeRequest(
   actor: Actor & { countryCode: string },
   input: { title: string; description: string },
@@ -87,20 +113,10 @@ export async function routeRequest(
 ): Promise<RouterDTO> {
   const count = await hitAiBucket(actor.id);
   if (count > env.aiLimitPerMinute()) throw rateLimited();
-  const ctx = await loadRoutingContext(actor.id);
-  const started = Date.now();
-  const result = await provider.suggest(SYSTEM_PROMPT, buildUserPrompt(ctx, input, actor.countryCode));
-  const latencyMs = Date.now() - started;
-  if (!result.ok) {
-    console.info(JSON.stringify({ event: "ai.route", requestId, latencyMs, outcome: result.reason }));
-    throw aiUnavailable(
-      result.reason === "UNCONFIGURED"
-        ? "AI suggestions are not configured on this server. You can still submit manually."
-        : undefined,
-    );
-  }
-  const suggestion = validateSuggestion(result.output, ctx);
-  console.info(JSON.stringify({ event: "ai.route", requestId, latencyMs, outcome: suggestion ? "OK" : "INVALID_OUTPUT" }));
-  if (!suggestion) throw aiInvalidOutput();
-  return suggestion;
+  const r = await suggestRouting({ requesterId: actor.id, countryCode: actor.countryCode }, input, requestId, provider);
+  if (r.ok) return r.suggestion;
+  if (r.reason === "INVALID_OUTPUT" || r.reason === "NO_STRUCTURED_OUTPUT") throw aiInvalidOutput();
+  throw aiUnavailable(
+    r.reason === "UNCONFIGURED" ? "AI suggestions are not configured on this server. You can still submit manually." : undefined,
+  );
 }

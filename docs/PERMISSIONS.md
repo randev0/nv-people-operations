@@ -20,7 +20,7 @@ All checks live in `src/server/auth/permissions.ts` and are applied by domain se
 | Create / edit employees | No | No | Yes |
 | Employee list | 403 | Self + direct reports (read-only) | All |
 | Organisation dashboard | 403 | 403 (uses `/dashboard/mine` with team) | Yes |
-| AI routing suggestion | Own draft | Own draft | Own draft |
+| AI routing suggestion | Own draft; stored suggestion on readable requests without the person | Same; person + refresh on requests they can assign | Same; person + refresh on all open requests |
 
 ## Record scoping
 

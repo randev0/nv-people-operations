@@ -72,17 +72,80 @@ test("personal dashboard is scoped; manager gets direct-report team totals only"
   assert.equal((await emp.get("/dashboard/mine")).json.data.team, undefined);
 });
 
-test("AI02/AI04: without a provider key the router returns 503 (draft untouched, nothing written), then 429 at the rate limit", async () => {
-  const c = await login("employee.my@example.com");
+test("AI02/AI04: provider failure → 503 with nothing written, invalid output → 503, then 429 at the rate limit; manual submit still works", async () => {
+  const c = await login("hr.ops@example.com"); // fresh AI budget (no other test uses this account)
   const before = await db.serviceRequest.count();
-  const body = { title: "Laptop broken", description: "My laptop does not boot after the update." };
-  const statuses: number[] = [];
-  for (let i = 0; i < 5; i++) statuses.push((await c.post("/ai/route-request", body)).status);
-  assert.deepEqual(statuses, [503, 503, 503, 429, 429]); // AI_RATE_LIMIT_PER_MINUTE=3 in the test runner
-  assert.equal(await db.serviceRequest.count(), before);
-  const invalid = await c.post("/ai/route-request", { title: "", description: "" });
-  assert.ok([400, 429].includes(invalid.status));
-  // Manual submission still works.
+  const fail = { title: "[ai-fail] Laptop broken", description: "My laptop does not boot after the update." };
+  const invalid = { title: "[ai-invalid] Laptop broken", description: "My laptop does not boot after the update." };
+  const r1 = await c.post("/ai/route-request", fail);
+  assert.equal(r1.status, 503);
+  assert.equal(r1.json.error.code, "AI_UNAVAILABLE");
+  const r2 = await c.post("/ai/route-request", invalid);
+  assert.equal(r2.status, 503);
+  assert.equal(r2.json.error.code, "AI_INVALID_OUTPUT");
+  const r3 = await c.post("/ai/route-request", { title: "Laptop broken", description: "My laptop does not boot after the update." });
+  assert.equal(r3.status, 200);
+  assert.equal(r3.json.data.needsReview, true);
+  assert.deepEqual([(await c.post("/ai/route-request", fail)).status, (await c.post("/ai/route-request", fail)).status], [429, 429]); // limit 3/min in tests
+  assert.equal(await db.serviceRequest.count(), before, "suggestions never create or change requests");
   const cat = await db.requestCategory.findUniqueOrThrow({ where: { code: "IT_EQUIPMENT" } });
-  assert.equal((await c.post("/requests", { ...body, categoryId: cat.id, priority: "HIGH" })).status, 201);
+  assert.equal((await c.post("/requests", { ...fail, categoryId: cat.id, priority: "HIGH" })).status, 201);
+});
+
+async function waitForSuggestion(c: Awaited<ReturnType<typeof login>>, id: string) {
+  for (let i = 0; i < 40; i++) {
+    const r = await c.get(`/requests/${id}/ai-suggestion`);
+    if (r.json.data.status !== "PENDING" && r.json.data.status !== "NONE") return r.json.data;
+    await new Promise((res) => setTimeout(res, 250));
+  }
+  throw new Error("suggestion never finished");
+}
+
+test("stored suggestion: generated after submit, person shown only to assigners, request never changed", async () => {
+  const emp = await login("employee.my@example.com");
+  const cat = await db.requestCategory.findUniqueOrThrow({ where: { code: "OTHER" } });
+  const created = await emp.post("/requests", { title: "Laptop screen flickers", description: "My laptop screen flickers constantly and I cannot read documents.", categoryId: cat.id, priority: "LOW" });
+  assert.equal(created.status, 201);
+  const id = created.json.data.id;
+
+  const asRequester = await waitForSuggestion(emp, id);
+  assert.equal(asRequester.status, "READY");
+  assert.equal(asRequester.category.code, "IT_EQUIPMENT");
+  assert.equal(asRequester.priority, "HIGH");
+  assert.equal(asRequester.suggestedAssignee, null, "requester does not see the suggested person");
+  assert.equal(asRequester.canRegenerate, false);
+
+  const mgr = await login("manager.my@example.com");
+  const asManager = (await mgr.get(`/requests/${id}/ai-suggestion`)).json.data;
+  assert.ok(asManager.suggestedAssignee, "assigner sees the suggested person");
+  assert.equal(asManager.suggestedAssignee.department.id, asManager.suggestedDepartment.id);
+  assert.equal(asManager.canRegenerate, true);
+
+  const row = await db.serviceRequest.findUniqueOrThrow({ where: { id } });
+  assert.equal(row.status, "SUBMITTED");
+  assert.equal(row.assigneeId, null);
+  assert.equal(row.categoryId, cat.id, "AI never rewrites the submitted category");
+  assert.equal(row.version, 1);
+
+  const cy = await login("employee.cy@example.com");
+  assert.equal((await cy.get(`/requests/${id}/ai-suggestion`)).status, 404);
+  assert.equal((await emp.post(`/requests/${id}/ai-suggestion`)).status, 403, "requester cannot regenerate");
+  const regen = await mgr.post(`/requests/${id}/ai-suggestion`);
+  assert.equal(regen.status, 200);
+  assert.equal(regen.json.data.status, "READY");
+
+  // The manager can then assign the suggested person through the normal, authorised path.
+  const a = await mgr.post(`/requests/${id}/assign`, { assigneeId: asManager.suggestedAssignee.id, expectedVersion: 1 });
+  assert.equal(a.status, 200);
+  assert.equal(a.json.data.assignee.id, asManager.suggestedAssignee.id);
+});
+
+test("stored suggestion: provider failure is recorded, request still usable", async () => {
+  const emp = await login("employee.cy@example.com");
+  const cat = await db.requestCategory.findUniqueOrThrow({ where: { code: "FACILITIES" } });
+  const created = await emp.post("/requests", { title: "[ai-fail] Broken chair", description: "The chair at my desk is broken.", categoryId: cat.id, priority: "LOW" });
+  const s = await waitForSuggestion(emp, created.json.data.id);
+  assert.equal(s.status, "FAILED");
+  assert.match(s.failureReason, /unavailable/);
+  assert.equal((await emp.get(`/requests/${created.json.data.id}`)).json.data.status, "SUBMITTED");
 });

@@ -37,6 +37,7 @@ Pagination: `page` ≥1 default 1, `pageSize` 1–100 default 20. Ordering is de
 - **TaskDTO** `{id, onboardingId, title, description, department:{id,name}, owner:UserSummary, dueDay, dueDate, status, effectiveStatus, isOverdue, version, prerequisites:[{id,title,status}], allowedActions:("START"|"COMPLETE")[]}`; in My Work also `hire:{id,name,department:{id,name}}`.
 - **OnboardingSummary** `{id, employee:UserSummary, startDate, timezone, templateName, completedAt, progress:{total,completed,pending,inProgress,blocked,overdue,percent}}`
 - **OnboardingDTO** = OnboardingSummary + `{tasks:TaskDTO[]}`
+- **RequestSuggestionDTO** `{status: PENDING|READY|FAILED|NONE, category:{id,code,name}|null, priority|null, suggestedDepartment:{id,name}|null, suggestedAssignee:{id,name,department}|null, explanation|null, failureReason|null (human text), updatedAt|null, canRegenerate}`. `POST /requests` triggers generation after the response is sent; the request itself is never modified.
 - **RouterDTO** `{categoryId, priority, suggestedDepartmentId, suggestedAssigneeId:string|null, suggestedAssigneeName:string|null, explanation, needsReview:true}` (name added so the advisory person can be shown; it is a candidate the server already validated)
 
 ## Endpoints
@@ -60,6 +61,8 @@ Pagination: `page` ≥1 default 1, `pageSize` 1–100 default 20. Ordering is de
 | GET /requests/:id/comments | `page,pageSize` | Paginated CommentDTO (oldest first) | Read policy |
 | POST /requests/:id/comments | `{body}` | CommentDTO 201 | Read policy |
 | GET /requests/:id/events | `page,pageSize` | Paginated RequestEventDTO | Read policy |
+| GET /requests/:id/ai-suggestion | — | RequestSuggestionDTO | Read policy; `suggestedAssignee` only for users who can assign |
+| POST /requests/:id/ai-suggestion | — | RequestSuggestionDTO (regenerated synchronously) | canAssignRequest, request SUBMITTED/ASSIGNED; AI rate limit |
 | GET /requests/:id/assignee-options | `q?,departmentId?` | UserSummary[] ≤100 | canAssignRequest |
 | POST /requests/:id/assign | `{assigneeId,expectedVersion}` | RequestDTO | Assignment policy + state machine |
 | POST /requests/:id/transition | `{action:START\|RESOLVE\|CLOSE,expectedVersion}` | RequestDTO | Transition policy |

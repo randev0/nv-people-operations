@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/server/auth/current-user";
 import { getRequest, listComments, listEvents } from "@/server/requests/service";
+import { getRequestSuggestion } from "@/server/ai/request-suggestion";
 import { routeIdOrNotFound } from "@/server/route-params-page";
 import { load } from "@/server/page";
 import { RequestWorkspace } from "@/components/requests/request-workspace";
@@ -17,7 +18,11 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
   const r = await load(() => getRequest(me, id));
   if (!r.ok) return null;
   const req = r.data;
-  const [comments, events] = await Promise.all([listComments(me, id, { page: 1, pageSize: 100 }), listEvents(me, id, { page: 1, pageSize: 100 })]);
+  const [comments, events, suggestion] = await Promise.all([
+    listComments(me, id, { page: 1, pageSize: 100 }),
+    listEvents(me, id, { page: 1, pageSize: 100 }),
+    getRequestSuggestion(me, id),
+  ]);
 
   const eventText = (e: (typeof events.data)[number]) => {
     switch (e.kind) {
@@ -75,7 +80,10 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
         }
         rail={
           <>
-            <RequestActions request={{ id: req.id, version: req.version, status: req.status, allowedActions: req.allowedActions, assigneeId: req.assignee?.id ?? null }} />
+            <RequestActions
+              request={{ id: req.id, version: req.version, status: req.status, allowedActions: req.allowedActions, assigneeId: req.assignee?.id ?? null, categoryId: req.category.id, priority: req.priority }}
+              suggestion={suggestion}
+            />
             <section className="rounded-lg border bg-card p-4 text-sm">
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2">
                 <dt className="text-muted-foreground">Category</dt><dd>{req.category.name}</dd>
