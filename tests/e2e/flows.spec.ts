@@ -92,7 +92,7 @@ test("HR creates a template in the editor; a dependency loop is flagged and reje
   await page.getByLabel("Task 1 title").fill("Order desk");
   await page.getByRole("button", { name: "Add task" }).click();
   await page.getByLabel("Task 2 title").fill("Assemble desk");
-  await page.getByLabel("Due day").nth(1).fill("3");
+  await page.getByLabel("Deadline").nth(1).selectOption("3");
   const t2 = page.getByRole("listitem").filter({ has: page.getByLabel("Task 2 title") });
   await t2.getByLabel("Order desk").check();
   const t1 = page.getByRole("listitem").filter({ has: page.getByLabel("Task 1 title") });
@@ -104,6 +104,10 @@ test("HR creates a template in the editor; a dependency loop is flagged and reje
   await page.getByRole("button", { name: "Create template" }).click();
   await page.waitForURL("**/templates");
   await expect(page.getByRole("link", { name: "E2E template" })).toBeVisible();
+  // Relative deadlines read the way HR writes them (Day 1 / Week 1 / Day 30).
+  await page.getByRole("link", { name: "Standard Employee Onboarding" }).click();
+  await expect(page.getByLabel("Deadline").first()).toHaveValue("1");
+  await expect(page.getByLabel("Deadline").nth(5).locator("option:checked")).toHaveText("Week 1 (day 7)");
 });
 
 test("employee navigation hides HR areas and direct visits are refused", async ({ page }) => {

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { api, ApiError, errorText } from "@/lib/api";
+import { DUE_DAY_PRESETS, formatDueDay } from "@/lib/format";
 
 type Dept = { id: string; name: string };
 type Task = { key: string; title: string; description: string; departmentId: string; dueDay: number; prerequisiteKeys: string[] };
@@ -131,7 +132,7 @@ export function TemplateEditor({ departments, template }: { departments: Dept[];
             const errs = Object.entries(fieldErrors).filter(([k]) => k.startsWith(`tasks.${i}.`)).flatMap(([, v]) => v);
             return (
               <li key={i} className="rounded-lg border bg-card p-4">
-                <div className="grid gap-3 md:grid-cols-[1fr_180px_110px]">
+                <div className="grid gap-3 md:grid-cols-[1fr_180px_150px]">
                   <div className="space-y-1">
                     <Label htmlFor={`${idp}-title`}>Task {i + 1} title</Label>
                     <Input id={`${idp}-title`} value={t.title} maxLength={160}
@@ -145,8 +146,23 @@ export function TemplateEditor({ departments, template }: { departments: Dept[];
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor={`${idp}-due`}>Due day</Label>
-                    <Input id={`${idp}-due`} type="number" min={1} max={365} value={t.dueDay} onChange={(e) => update(i, { dueDay: Number(e.target.value) })} />
+                    <Label htmlFor={`${idp}-due`}>Deadline</Label>
+                    <select
+                      id={`${idp}-due`}
+                      value={(DUE_DAY_PRESETS as readonly number[]).includes(t.dueDay) ? String(t.dueDay) : "custom"}
+                      onChange={(e) => update(i, { dueDay: e.target.value === "custom" ? (t.dueDay > 1 ? t.dueDay : 4) : Number(e.target.value) })}
+                      className="h-9 w-full rounded-md border bg-card px-2 text-sm"
+                    >
+                      {DUE_DAY_PRESETS.map((d) => (
+                        <option key={d} value={d}>{formatDueDay(d)}{formatDueDay(d).startsWith("Week") ? ` (day ${d})` : ""}</option>
+                      ))}
+                      <option value="custom">Custom day…</option>
+                    </select>
+                    {(DUE_DAY_PRESETS as readonly number[]).includes(t.dueDay) ? null : (
+                      <Input aria-label={`Task ${i + 1} custom deadline day`} type="number" min={1} max={365} value={t.dueDay}
+                        onChange={(e) => update(i, { dueDay: Number(e.target.value) })} />
+                    )}
+                    <p className="text-xs text-muted-foreground">Day 1 = joining date</p>
                   </div>
                   <div className="space-y-1 md:col-span-3">
                     <Label htmlFor={`${idp}-desc`}>Description</Label>

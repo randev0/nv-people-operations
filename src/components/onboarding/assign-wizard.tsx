@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, ApiError, errorText } from "@/lib/api";
-import { formatCalendarDate } from "@/lib/format";
+import { formatCalendarDate, formatDueDay } from "@/lib/format";
 
 type Emp = { id: string; name: string; countryCode: string; department: { name: string }; joiningDate: string };
 type Tpl = { id: string; name: string; taskCount: number };
@@ -118,7 +118,7 @@ export function AssignWizard({ templates, employees, initialEmployeeId }: { temp
                         {t.prerequisiteKeys.length ? <p className="text-xs text-muted-foreground">After: {t.prerequisiteKeys.map((k) => options.tasks.find((x) => x.key === k)?.title ?? k).join(", ")}</p> : null}
                       </TableCell>
                       <TableCell>{t.departmentName}</TableCell>
-                      <TableCell className="whitespace-nowrap">{formatCalendarDate(t.dueDate)} <span className="text-xs text-muted-foreground">(day {t.dueDay})</span></TableCell>
+                      <TableCell className="whitespace-nowrap">{formatCalendarDate(t.dueDate)} <span className="text-xs text-muted-foreground">({formatDueDay(t.dueDay)})</span></TableCell>
                       <TableCell>
                         <label className="sr-only" htmlFor={`owner-${t.key}`}>Owner for {t.title}</label>
                         <select id={`owner-${t.key}`} value={owners[t.key] ?? ""} onChange={(e) => setOwners((o) => ({ ...o, [t.key]: e.target.value }))}

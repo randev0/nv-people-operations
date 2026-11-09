@@ -48,3 +48,15 @@ export function formatCalendarDate(d: string): string {
   const [y, m, day] = d.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
+
+/**
+ * Relative deadline label used across templates and checklists.
+ * Day 1 is the joining date; exact weeks read as "Week n" (Day 7 = Week 1).
+ */
+export function formatDueDay(dueDay: number): string {
+  if (dueDay > 1 && dueDay % 7 === 0) return `Week ${dueDay / 7}`;
+  return `Day ${dueDay}`;
+}
+
+/** Presets offered in the template editor (value = dueDay). */
+export const DUE_DAY_PRESETS = [1, 2, 3, 5, 7, 14, 21, 30, 60, 90] as const;

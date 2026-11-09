@@ -8,7 +8,7 @@ import { CheckCircle2, Clock, Lock, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OverdueBadge, StatusBadge } from "@/components/common/status-badge";
 import { api, ApiError, errorText } from "@/lib/api";
-import { formatCalendarDate, STATUS_LABEL } from "@/lib/format";
+import { formatCalendarDate, formatDueDay, STATUS_LABEL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export type TaskView = {
@@ -75,7 +75,7 @@ export function TaskCard({ task, timezone, showHire = false }: { task: TaskView;
       </div>
       {task.description ? <p className="mt-2 text-sm text-muted-foreground">{task.description}</p> : null}
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
-        <div><dt className="inline text-muted-foreground">Due: </dt><dd className="inline">{formatCalendarDate(task.dueDate)} (day {task.dueDay}){timezone ? <span className="text-muted-foreground"> · {timezone}</span> : null}</dd></div>
+        <div className="col-span-2 sm:col-span-3"><dt className="inline text-muted-foreground">Due: </dt><dd className="inline"><span className="font-medium">{formatDueDay(task.dueDay)}</span> · {formatCalendarDate(task.dueDate)}{timezone ? <span className="text-muted-foreground"> · {timezone}</span> : null}</dd></div>
         <div><dt className="inline text-muted-foreground">Team: </dt><dd className="inline">{task.department.name}</dd></div>
         <div><dt className="inline text-muted-foreground">Owner: </dt><dd className="inline">{task.owner.name}</dd></div>
       </dl>

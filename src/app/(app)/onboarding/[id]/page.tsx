@@ -6,7 +6,7 @@ import { load } from "@/server/page";
 import { PageHeader } from "@/components/common/page-header";
 import { ProgressSummary } from "@/components/onboarding/progress-summary";
 import { TaskCard } from "@/components/onboarding/task-card";
-import { COUNTRY_LABEL, formatCalendarDate, formatInstant } from "@/lib/format";
+import { COUNTRY_LABEL, formatCalendarDate, formatDueDay, formatInstant } from "@/lib/format";
 
 export const metadata = { title: "Onboarding checklist · People Operations" };
 
@@ -20,7 +20,7 @@ export default async function OnboardingDetail({ params, searchParams }: { param
   const groups = new Map<string, typeof o.tasks>();
   const ordered = group === "deadline" ? [...o.tasks].sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.dueDay - b.dueDay) : o.tasks;
   for (const t of ordered) {
-    const k = group === "department" ? t.department.name : `Due ${formatCalendarDate(t.dueDate)} (day ${t.dueDay})`;
+    const k = group === "department" ? t.department.name : `${formatDueDay(t.dueDay)} — due ${formatCalendarDate(t.dueDate)}`;
     groups.set(k, [...(groups.get(k) ?? []), t]);
   }
   const keys = group === "department" ? [...groups.keys()].sort() : [...groups.keys()];
