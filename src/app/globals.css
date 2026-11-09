@@ -1,0 +1,48 @@
+/* Adapted from ERACare src/app/globals.css: light token set and base layer kept;
+   single restrained accent instead of magenta; page-glow gradients, dark theme
+   and unrelated global rules removed. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: hsl(220 25% 97%);
+    --foreground: hsl(222 47% 11%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(222 47% 11%);
+    --popover: hsl(0 0% 100%);
+    --popover-foreground: hsl(222 47% 11%);
+    --primary: hsl(221 70% 42%);
+    --primary-foreground: hsl(0 0% 100%);
+    --secondary: hsl(220 24% 95%);
+    --secondary-foreground: hsl(222 47% 11%);
+    --muted: hsl(216 20% 94%);
+    --muted-foreground: hsl(215 16% 36%);
+    --accent: hsl(218 60% 95%);
+    --accent-foreground: hsl(222 47% 11%);
+    --destructive: hsl(0 72% 45%);
+    --destructive-foreground: hsl(0 0% 98%);
+    --border: hsl(214 20% 88%);
+    --input: hsl(214 20% 82%);
+    --ring: hsl(221 70% 42%);
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    scrollbar-gutter: stable;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
