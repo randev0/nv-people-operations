@@ -144,3 +144,4 @@
 
 ## 2026-11-10 — Equipment card restored on Today
 - Feedback: the one-line equipment sentence was less clear than the earlier card. Restored the earlier card exactly (holo edge, heading "IT equipment for new hires", "5 people who joined in the last 60 days have 5 open IT equipment requests; the oldest was opened 15 days ago.", outline "Review requests" button), 340 px wide as before, below the work list. Tests switched back to the card's wording. e2e 20/20.
+- Follow-up: the 340 px card looked stranded in the single column, so it now spans the column width (heading and sentence on the left, Review requests on the right); on phones it stacks as before. Same style. e2e 20/20.

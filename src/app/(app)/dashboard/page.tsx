@@ -113,7 +113,8 @@ const isAssign = (i: WorkItem) => i.action.kind === "link" && i.action.label ===
 function EquipmentCard({ insight }: { insight: Insight }) {
   if (insight.requests === 0) return null;
   return (
-    <section aria-labelledby="insight-h" className="holo-edge mt-5 max-w-[340px] rounded-2xl bg-card px-4 py-4">
+    <section aria-labelledby="insight-h" className="holo-edge mt-5 flex flex-col gap-3 rounded-2xl bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className="min-w-0">
       <h2 id="insight-h" className="text-[15px] font-semibold tracking-[-0.02em]">IT equipment for new hires</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {insight.scope === "self" ? (
@@ -126,7 +127,8 @@ function EquipmentCard({ insight }: { insight: Insight }) {
           </>
         )}
       </p>
-      <Button asChild size="sm" variant="outline" className="mt-3">
+      </div>
+      <Button asChild size="sm" variant="outline" className="shrink-0 self-start sm:self-auto">
         <Link href={insight.href}>Review requests <ArrowRight aria-hidden /></Link>
       </Button>
     </section>
