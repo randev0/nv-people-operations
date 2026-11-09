@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { api, ApiError, errorText } from "@/lib/api";
 import { AiSuggestionPanel, type Suggestion } from "@/components/requests/ai-suggestion-panel";
-import { Avatar, Panel, PanelHeader } from "@/components/common/surface";
 
 type Option = { id: string; name: string; countryCode: string; department: { id: string; name: string } };
 type ReqInfo = { id: string; version: number; status: string; allowedActions: string[]; assignee: { id: string; name: string; department: { name: string } } | null; categoryId: string; priority: string };
@@ -69,7 +68,7 @@ export function RequestHeaderActions({ request }: { request: ReqInfo }) {
   );
 }
 
-/** Sidebar: current assignee, assignment form for assigners, and the AI routing suggestion. */
+/** "Next step" content for assigners: AI routing note, person search and picker on one line. */
 export function AssignmentPanel({ request, suggestion, onAssigned }: { request: ReqInfo; suggestion: Suggestion; onAssigned?: (assigneeName: string) => void }) {
   const { pending, error, success, run } = useAction();
   const [options, setOptions] = useState<Option[] | null>(null);
@@ -113,75 +112,68 @@ export function AssignmentPanel({ request, suggestion, onAssigned }: { request: 
     else setLoadError("The suggested person is not an eligible assignee for this request.");
   }
 
+  const ai = (
+    <AiSuggestionPanel
+      requestId={request.id}
+      initial={suggestion}
+      currentCategoryId={request.categoryId}
+      currentPriority={request.priority}
+      onUsePerson={canAssign ? (id) => (options ? applyPerson(id, options) : setWanted(id)) : undefined}
+    />
+  );
+
+  // Not an assigner: only the (read-only) AI routing note, if any.
+  if (!canAssign) return ai;
+
   return (
-    <>
-      <Panel aria-labelledby="assignee-h">
-        <PanelHeader id="assignee-h" title="Assignee" />
-        <div className="space-y-3 px-4 py-3 text-sm">
-          {request.assignee ? (
-            <p className="flex items-center gap-2">
-              <Avatar name={request.assignee.name} />
-              <span>
-                <span className="font-medium">{request.assignee.name}</span>
-                <span className="block text-xs text-muted-foreground">{request.assignee.department.name}</span>
-              </span>
-            </p>
-          ) : (
-            <p className="text-muted-foreground">Nobody yet{canAssign ? " — assign someone below." : " — waiting for the requester's manager or HR."}</p>
-          )}
-          {canAssign ? (
-            <form
-              className="space-y-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!assigneeId) return;
-                const name = chosen?.name ?? "the selected person";
-                run("assign", () => api(`/requests/${request.id}/assign`, { method: "POST", body: { assigneeId, expectedVersion: request.version } }), `Assigned to ${name}`, () => onAssigned?.(name));
-              }}
-            >
-              <Label htmlFor="assignee-search">Find a person</Label>
-              <input
-                id="assignee-search"
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Name, team or country"
-                aria-describedby="assignee-count"
-                className="h-9 w-full rounded-md border border-input bg-card px-3 placeholder:text-muted-foreground"
-                disabled={!options}
-              />
-              <p id="assignee-count" className="text-xs text-muted-foreground" aria-live="polite">
-                {options ? (needle ? `${shown} matching ${shown === 1 ? "person" : "people"}` : "Suggested person and the request's team are listed first") : "Loading people…"}
-              </p>
-              <Label htmlFor="assignee">{request.status === "SUBMITTED" ? "Assign to" : "Reassign to"}</Label>
-              <select id="assignee" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className="h-9 w-full rounded-md border border-input bg-card px-2" disabled={!options}>
-                <option value="">{options ? (shown ? "Choose a person" : "Nobody matches the search") : "Loading people…"}</option>
-                {groups.map((g) => (
-                  <optgroup key={g.label} label={g.label}>
-                    {g.people.map((o) => (
-                      <option key={o.id} value={o.id}>{o.name} — {o.department.name} ({o.countryCode})</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-              <Button type="submit" size="sm" className="w-full" disabled={!assigneeId || pending !== null}>
-                {pending === "assign" ? "Assigning…" : request.status === "SUBMITTED" ? "Assign" : "Reassign"}
-              </Button>
-            </form>
-          ) : null}
-          <div aria-live="polite">
-            {loadError || error ? <p className="text-destructive" role="alert">{loadError ?? error}</p> : null}
-            {success ? <p className="flex items-center gap-1 text-success"><CheckCircle2 className="h-4 w-4" aria-hidden />{success}</p> : null}
-          </div>
+    <div className="space-y-3">
+      {ai}
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!assigneeId) return;
+          const name = chosen?.name ?? "the selected person";
+          run("assign", () => api(`/requests/${request.id}/assign`, { method: "POST", body: { assigneeId, expectedVersion: request.version } }), `Assigned to ${name}`, () => onAssigned?.(name));
+        }}
+      >
+        <div className="min-w-[12rem] flex-1 basis-48 space-y-1">
+          <Label htmlFor="assignee-search">Find a person</Label>
+          <input
+            id="assignee-search"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Name, team or country"
+            aria-describedby="assignee-count"
+            className="h-9 w-full rounded-md border border-input bg-card px-3 placeholder:text-muted-foreground"
+            disabled={!options}
+          />
         </div>
-      </Panel>
-      <AiSuggestionPanel
-        requestId={request.id}
-        initial={suggestion}
-        currentCategoryId={request.categoryId}
-        currentPriority={request.priority}
-        onUsePerson={canAssign ? (id) => (options ? applyPerson(id, options) : setWanted(id)) : undefined}
-      />
-    </>
+        <div className="min-w-[14rem] flex-[1.4] basis-64 space-y-1">
+          <Label htmlFor="assignee">{request.status === "SUBMITTED" ? "Assign to" : "Reassign to"}</Label>
+          <select id="assignee" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className="h-9 w-full rounded-md border border-input bg-card px-2" disabled={!options}>
+            <option value="">{options ? (shown ? "Choose a person" : "Nobody matches the search") : "Loading people…"}</option>
+            {groups.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.people.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name} — {o.department.name} ({o.countryCode})</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        <Button type="submit" disabled={!assigneeId || pending !== null}>
+          {pending === "assign" ? "Assigning…" : request.status === "SUBMITTED" ? "Assign" : "Reassign"}
+        </Button>
+      </form>
+      <p id="assignee-count" className="text-xs text-muted-foreground" aria-live="polite">
+        {options ? (needle ? `${shown} matching ${shown === 1 ? "person" : "people"}` : "The AI-suggested person and the request's team are listed first.") : "Loading people…"}
+      </p>
+      <div aria-live="polite" className="text-sm">
+        {loadError || error ? <p className="text-destructive" role="alert">{loadError ?? error}</p> : null}
+        {success ? <p className="flex items-center gap-1 text-success"><CheckCircle2 className="h-4 w-4" aria-hidden />{success}</p> : null}
+      </div>
+    </div>
   );
 }

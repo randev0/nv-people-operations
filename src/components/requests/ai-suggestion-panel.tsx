@@ -71,55 +71,54 @@ export function AiSuggestionPanel({
 
   if (s.status === "NONE" && !s.canRegenerate) return null;
 
+  const person = s.suggestedAssignee;
+  const catDiffers = s.category && s.category.id !== currentCategoryId;
+  const priDiffers = s.priority && s.priority !== currentPriority;
   return (
-    <section className="rounded-lg border border-info/30 bg-card p-4 text-sm" aria-labelledby="ai-sugg" aria-live="polite">
-      <h2 id="ai-sugg" className="flex items-center gap-1.5 text-sm font-semibold">
-        <Sparkles className="h-4 w-4 text-link" aria-hidden /> AI routing suggestion
-      </h2>
-      {s.status === "PENDING" ? <p className="mt-2 text-muted-foreground">Analysing the description…</p> : null}
-      {s.status === "NONE" ? <p className="mt-2 text-muted-foreground">No suggestion yet.</p> : null}
-      {s.status === "FAILED" ? <p className="mt-2 text-muted-foreground">{s.failureReason ?? "No suggestion available."} Assign manually as usual.</p> : null}
-      {s.status === "READY" ? (
-        <>
-          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-            <dt className="text-muted-foreground">Team</dt>
-            <dd>{s.suggestedDepartment?.name ?? "—"}</dd>
-            {s.canRegenerate ? (
-              <>
-                <dt className="text-muted-foreground">Person</dt>
-                <dd>{s.suggestedAssignee ? `${s.suggestedAssignee.name} (${s.suggestedAssignee.department.name})` : "No specific person"}</dd>
-              </>
-            ) : null}
-            <dt className="text-muted-foreground">Category</dt>
-            <dd>
-              {s.category?.name ?? "—"}
-              {s.category && s.category.id !== currentCategoryId ? <span className="text-warning"> (submitted under a different category)</span> : null}
-            </dd>
-            <dt className="text-muted-foreground">Priority</dt>
-            <dd>
-              {s.priority ? PRIORITY_LABEL[s.priority] : "—"}
-              {s.priority && s.priority !== currentPriority ? <span className="text-warning"> (submitted as {PRIORITY_LABEL[currentPriority]})</span> : null}
-            </dd>
-          </dl>
-          {s.explanation ? <p className="mt-2 whitespace-pre-wrap">{s.explanation}</p> : null}
-          <p className="mt-1 text-xs text-muted-foreground">Advisory only — a person decides the assignment.</p>
-        </>
-      ) : null}
-      {error ? <p className="mt-2 text-destructive" role="alert">{error}</p> : null}
-      {s.canRegenerate ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {s.status === "READY" && s.suggestedAssignee && onUsePerson ? (
-            <Button size="sm" type="button" onClick={() => onUsePerson(s.suggestedAssignee!.id)}>
-              Use {s.suggestedAssignee.name.split(" ")[0]} as assignee
-            </Button>
+    <section className="rounded-xl border border-info/25 bg-info/[0.06] px-4 py-3 text-sm" aria-labelledby="ai-sugg" aria-live="polite">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0 flex-1">
+          <h2 id="ai-sugg" className="text-xs font-semibold text-muted-foreground">
+            <Sparkles className="mr-1.5 inline h-3.5 w-3.5 align-[-2px] text-link" aria-hidden />AI routing suggestion
+            <span className="block font-normal sm:ml-1 sm:inline">· advisory, a person decides</span>
+          </h2>
+          {s.status === "PENDING" ? <p className="mt-1 text-muted-foreground">Analysing the description…</p> : null}
+          {s.status === "NONE" ? <p className="mt-1 text-muted-foreground">No suggestion yet.</p> : null}
+          {s.status === "FAILED" ? <p className="mt-1 text-muted-foreground">{s.failureReason ?? "No suggestion available."} Assign manually as usual.</p> : null}
+          {s.status === "READY" ? (
+            <>
+              <p className="mt-1">
+                {s.canRegenerate && person ? (
+                  <>Suggests <strong className="font-semibold">{person.name}</strong> ({person.department.name})</>
+                ) : (
+                  <>Suggests the <strong className="font-semibold">{s.suggestedDepartment?.name ?? "—"}</strong> team</>
+                )}
+                <span className="text-muted-foreground">
+                  {" "}· {s.category?.name ?? "—"}
+                  {catDiffers ? <span className="text-warning"> (submitted under a different category)</span> : null} · {s.priority ? `${PRIORITY_LABEL[s.priority]} priority` : "—"}
+                  {priDiffers ? <span className="text-warning"> (submitted as {PRIORITY_LABEL[currentPriority]})</span> : null}
+                </span>
+              </p>
+              {s.explanation ? <p className="mt-1 line-clamp-3 text-xs text-muted-foreground" title={s.explanation}>{s.explanation}</p> : null}
+            </>
           ) : null}
-          {s.status !== "PENDING" ? (
-            <Button size="sm" type="button" variant="outline" onClick={regenerate} disabled={busy}>
-              {busy ? "Asking AI…" : s.status === "READY" ? "Refresh suggestion" : "Get suggestion"}
-            </Button>
-          ) : null}
+          {error ? <p className="mt-1 text-destructive" role="alert">{error}</p> : null}
         </div>
-      ) : null}
+        {s.canRegenerate ? (
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {s.status === "READY" && person && onUsePerson ? (
+              <Button size="sm" type="button" onClick={() => onUsePerson(person.id)}>
+                Use {person.name.split(" ")[0]} as assignee
+              </Button>
+            ) : null}
+            {s.status !== "PENDING" ? (
+              <Button size="sm" type="button" variant="outline" onClick={regenerate} disabled={busy}>
+                {busy ? "Asking AI…" : s.status === "READY" ? "Refresh" : "Get suggestion"}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }

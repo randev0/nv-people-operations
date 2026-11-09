@@ -23,7 +23,7 @@ Never copied: API routes, Prisma schema/migrations, deployment/setup scripts, CL
 | tailwind.config.js | tailwind.config.ts | Adapted | TypeScript; content glob limited to `src/`; removed comment block, container and accordion keyframes; same token mapping | Token mapping |
 | components.json | components.json | Copied | — | shadcn config |
 | src/components/DashboardLayout.tsx | src/components/layout/app-shell.tsx | Adapted | Typed user prop, role-based nav, removed AutoLogout/Header/Sidebar imports and localStorage collapse; later restyled (grouped nav, avatar footer, focusable `main`) | App shell |
-| src/components/tickets/workspace/TicketWorkspaceShell.tsx | src/components/requests/request-workspace.tsx | Adapted | Reduced to main column + right rail | Request detail layout |
+| src/components/tickets/workspace/TicketWorkspaceShell.tsx | (removed 2026-11-09) | Adapted, then removed | Was reduced to main column + right rail; the request page became a single column with a "Next step" block, so the shell is no longer used | Request detail layout (former) |
 | src/components/tasks/TaskCard.tsx | src/components/onboarding/task-card.tsx | Adapted | Removed project/contract/time-log fields; added blocked reason, overdue flag, owner actions; later rewritten as a checklist row (`<li>`) with plain-language "Waiting for …" reasons | Task display |
 | src/lib/auth.ts | src/server/auth/session.ts | Reference only | Rewritten: session holds `{userId, sessionVersion}` only; role loaded server-side | Cookie option pattern |
 
