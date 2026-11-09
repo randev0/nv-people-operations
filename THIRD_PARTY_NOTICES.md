@@ -21,4 +21,4 @@ Other dependencies are listed with their licences in `package-lock.json` / `node
 
 ## Images
 
-- Sign-in panel photo: "Abstract purple and blue curves" by Pawel Czerwinski, https://unsplash.com/photos/abstract-purple-and-blue-curves-Y8Y_s90SK3A, used under the Unsplash License (free to use; credited on the page anyway). Stored as `public/images/login-abstract.{webp,jpg}` (1600 px wide).
+- Sign-in panel photo: "Abstract purple and blue curves" by Pawel Czerwinski, https://unsplash.com/photos/abstract-purple-and-blue-curves-Y8Y_s90SK3A, used under the Unsplash License (free for commercial and non-commercial use; attribution not required, so the page shows no credit). Stored as `public/images/login-abstract.{webp,jpg}` (1600 px wide).

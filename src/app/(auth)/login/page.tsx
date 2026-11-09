@@ -24,7 +24,7 @@ function Logo() {
 
 /**
  * Sign-in: a minimal abstract photo panel carrying the logo on the left (free Unsplash
- * photo, see THIRD_PARTY_NOTICES) and the form on the right.
+ * photo, no attribution required; source recorded in THIRD_PARTY_NOTICES) and the form on the right.
  */
 export default async function LoginPage() {
   if (await getCurrentUser()) redirect("/dashboard");
@@ -38,15 +38,7 @@ export default async function LoginPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" aria-hidden />
         <div className="relative flex h-full flex-col justify-between p-10">
           <Logo />
-          <div className="flex items-end justify-between gap-6">
-            <p className="max-w-xs text-sm text-white/80">Service requests and onboarding, in one workspace.</p>
-            <p className="shrink-0 text-[11px] text-white/50">
-              Photo:{" "}
-              <a href="https://unsplash.com/photos/abstract-purple-and-blue-curves-Y8Y_s90SK3A" className="underline-offset-2 hover:underline" target="_blank" rel="noreferrer">
-                Pawel Czerwinski / Unsplash
-              </a>
-            </p>
-          </div>
+          <p className="max-w-xs text-sm text-white/80">Service requests and onboarding, in one workspace.</p>
         </div>
       </section>
 
