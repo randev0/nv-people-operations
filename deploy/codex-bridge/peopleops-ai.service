@@ -1,0 +1,31 @@
+# /etc/systemd/system/peopleops-ai.service — Codex bridge with its own ChatGPT login session
+[Unit]
+Description=People Operations AI bridge (Codex CLI, dedicated login)
+After=network.target
+
+[Service]
+Type=simple
+User=peopleops-ai
+Group=peopleops-ai
+SupplementaryGroups=
+Environment=HOME=/var/lib/peopleops-ai
+Environment=CODEX_HOME=/var/lib/peopleops-ai/codex
+Environment=CODEX_MODEL=gpt-6.1-sol
+Environment=BRIDGE_SOCKET=/run/peopleops-ai/bridge.sock
+RuntimeDirectory=peopleops-ai
+RuntimeDirectoryMode=0750
+ExecStart=/usr/bin/node /opt/peopleops-ai/bridge.mjs
+Restart=always
+RestartSec=5
+MemoryMax=768M
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/peopleops-ai /tmp
+PrivateTmp=true
+ProtectHome=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=peopleops-ai
+
+[Install]
+WantedBy=multi-user.target

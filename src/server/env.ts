@@ -23,8 +23,9 @@ export const env = {
   },
   anthropicKey: () => process.env.ANTHROPIC_API_KEY || null,
   anthropicModel: () => process.env.ANTHROPIC_MODEL || null,
-  /** "anthropic" (default) or "openai". */
-  aiProvider: () => (process.env.AI_PROVIDER === "openai" ? "openai" : "anthropic") as "anthropic" | "openai",
+  /** "anthropic" (default), "openai" (platform API key) or "codex" (local Codex bridge). */
+  aiProvider: (): "anthropic" | "openai" | "codex" =>
+    process.env.AI_PROVIDER === "openai" ? "openai" : process.env.AI_PROVIDER === "codex" ? "codex" : "anthropic",
   openaiKey: () => process.env.OPENAI_API_KEY || null,
   openaiModel: () => process.env.OPENAI_MODEL || null,
   loginLimit: () => Number(process.env.LOGIN_RATE_LIMIT ?? 10),
