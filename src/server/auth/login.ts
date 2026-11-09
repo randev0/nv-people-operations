@@ -37,7 +37,13 @@ export async function login(input: z.infer<typeof loginSchema>, ip: string): Pro
   return toEmployeeDTO(user);
 }
 
-export async function logout() {
+/**
+ * Sealed cookies are stateless, so destroying the cookie alone would leave a copied
+ * cookie usable until expiry. Bumping sessionVersion makes every earlier cookie for
+ * this user invalid (trade-off: logout signs the user out on all devices).
+ */
+export async function logout(userId: string) {
   const session = await getSession();
+  await db.user.update({ where: { id: userId }, data: { sessionVersion: { increment: 1 } } });
   session.destroy();
 }
