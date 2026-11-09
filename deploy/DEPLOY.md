@@ -54,4 +54,6 @@ Caveat (told to the candidate): this serves app users from a personal ChatGPT pl
 
 Alternative: the env file also supports `AI_PROVIDER=openai` and `OPENAI_MODEL=gpt-6.1-sol`; set `OPENAI_API_KEY=` (an OpenAI platform API key) in `/etc/peopleops/peopleops.env`, then `systemctl restart peopleops`. (Anthropic alternative: `AI_PROVIDER=anthropic` + `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL`.)
 
+When `package-lock.json` is unchanged since the running release, a slim bundle (standalone output without `node_modules`, about 1.4 MB instead of 56 MB) can be shipped and the previous release's `app/node_modules` copied in on the VPS (`cp -a <prev>/app/node_modules <new>/app/`). Used for 236efde after the full bundle timed out in transfer.
+
 Logs: `journalctl -u peopleops -f`. Rollback: point `/opt/peopleops/current` at the previous release and restart.
