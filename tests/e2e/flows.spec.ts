@@ -56,13 +56,13 @@ test("request lifecycle with AI routing (draft suggestion + assigner suggestion)
   await page.getByRole("button", { name: "Post comment" }).click();
   await expect(page.getByText("Replaced the cable; please confirm.")).toBeVisible();
   await page.getByRole("button", { name: "Mark resolved" }).click();
-  await expect(page.getByText(/moved it from In progress to Resolved/)).toBeVisible();
+  await expect(page.getByText(/changed status from In progress to Resolved/)).toBeVisible();
   await signOut(page);
 
   await signIn(page, "employee.my@example.com");
   await page.goto(url);
   await page.getByRole("button", { name: "Close request" }).click();
-  await expect(page.getByText(/moved it from Resolved to Closed/)).toBeVisible();
+  await expect(page.getByText(/changed status from Resolved to Closed/)).toBeVisible();
   await page.reload();
   await expect(page.getByText("Replaced the cable; please confirm.")).toBeVisible();
 });
@@ -70,10 +70,14 @@ test("request lifecycle with AI routing (draft suggestion + assigner suggestion)
 test("IT owner completes a prerequisite in My Work and the dependent task unblocks", async ({ page }) => {
   await signIn(page, "it.owner@example.com");
   await page.getByRole("link", { name: "My Work", exact: true }).click();
-  const account = page.getByRole("article", { name: "Create company account" });
+  // Flow 3: the blocked task explains what it is waiting for, by name.
+  const handoverBefore = page.getByRole("listitem", { name: "Hand over laptop and verify login" });
+  await expect(handoverBefore.getByText("Waiting for IT to create company account (in progress)")).toBeVisible();
+  await expect(handoverBefore.getByRole("button", { name: "Start task" })).toHaveCount(0);
+  const account = page.getByRole("listitem", { name: "Create company account" });
   await account.getByRole("button", { name: "Mark complete" }).click();
   await expect(account).toHaveCount(0); // leaves the Open list
-  const handover = page.getByRole("article", { name: "Hand over laptop and verify login" });
+  const handover = page.getByRole("listitem", { name: "Hand over laptop and verify login" });
   await expect(handover.getByRole("button", { name: "Start task" })).toBeVisible();
   await handover.getByRole("button", { name: "Start task" }).click();
   await expect(handover.getByText("In progress", { exact: true })).toBeVisible();

@@ -7,25 +7,28 @@
 
 @layer base {
   :root {
-    --background: hsl(220 25% 97%);
-    --foreground: hsl(222 47% 11%);
-    --card: hsl(0 0% 100%);
-    --card-foreground: hsl(222 47% 11%);
-    --popover: hsl(0 0% 100%);
-    --popover-foreground: hsl(222 47% 11%);
-    --primary: hsl(221 70% 42%);
-    --primary-foreground: hsl(0 0% 100%);
-    --secondary: hsl(220 24% 95%);
-    --secondary-foreground: hsl(222 47% 11%);
-    --muted: hsl(216 20% 94%);
-    --muted-foreground: hsl(215 16% 36%);
-    --accent: hsl(218 60% 95%);
-    --accent-foreground: hsl(222 47% 11%);
-    --destructive: hsl(0 72% 45%);
-    --destructive-foreground: hsl(0 0% 98%);
-    --border: hsl(214 20% 88%);
-    --input: hsl(214 20% 82%);
-    --ring: hsl(221 70% 42%);
+    /* Tokens are HSL channels so Tailwind opacity modifiers (bg-primary/90) work.
+       People Operations theme: warm off-white canvas, white work surfaces,
+       graphite text, one deep-indigo accent. Status colours live in badge variants. */
+    --background: 40 23% 97%;
+    --foreground: 222 16% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 16% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 16% 15%;
+    --primary: 244 52% 44%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 40 14% 94%;
+    --secondary-foreground: 222 16% 15%;
+    --muted: 40 12% 93%;
+    --muted-foreground: 222 8% 40%;
+    --accent: 244 60% 96%;
+    --accent-foreground: 244 52% 30%;
+    --destructive: 0 68% 44%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 36 12% 87%;
+    --input: 36 10% 80%;
+    --ring: 244 52% 44%;
     --radius: 0.5rem;
   }
 }
@@ -39,10 +42,15 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   }
   :focus-visible {
-    outline: 2px solid var(--ring);
+    outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
+    border-radius: 4px;
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.01em;
   }
 }

@@ -55,7 +55,7 @@ Pagination: `page` ≥1 default 1, `pageSize` 1–100 default 20. Ordering is de
 | GET /employees/:id | — | EmployeeDTO | Self, direct manager, HR (else 404) |
 | PATCH /employees/:id | subset `{name,role,countryCode,departmentId,managerId,joiningDate,employmentStatus,loginEnabled}` | EmployeeDTO | HR; reporting rules validated |
 | GET /employees/manager-options | — | UserSummary[] (login-enabled MANAGER/HR) | HR (for employee form) |
-| GET /requests | `page,pageSize,q,status,categoryId,priority,countryCode,scope=mine\|team\|assigned\|all` | Paginated RequestDTO | `team` Manager/HR only, `all` HR only, else 403 |
+| GET /requests | `page,pageSize,q,status,categoryId,priority,countryCode,scope=mine\|team\|assigned\|all,insight=new-hires-it` | Paginated RequestDTO | `team` Manager/HR only, `all` HR only, else 403. `insight=new-hires-it` (HR only) narrows to the requests behind the dashboard insight, using the same server function as the card |
 | POST /requests | `{title,description,categoryId,priority}` | RequestDTO 201 | Any; requester = session user |
 | GET /requests/:id | — | RequestDTO | Read policy |
 | GET /requests/:id/comments | `page,pageSize` | Paginated CommentDTO (oldest first) | Read policy |

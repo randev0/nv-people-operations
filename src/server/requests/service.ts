@@ -7,6 +7,7 @@ import {
   canAssignRequest,
   canReadRequest,
   canTransitionRequest,
+  isHrAdmin,
   requestListScopeWhere,
   requestReadScopeWhere,
 } from "../auth/permissions";
@@ -36,6 +37,12 @@ export async function listRequests(actor: Actor, q: ListRequestsQuery) {
   if (q.categoryId) filters.push({ categoryId: q.categoryId });
   if (q.priority) filters.push({ priority: q.priority });
   if (q.countryCode) filters.push({ requester: { countryCode: q.countryCode } });
+  if (q.insight === "new-hires-it") {
+    if (!isHrAdmin(actor)) throw forbidden("This view is available to HR admins.");
+    const { newHiresWithOpenItRequests } = await import("../dashboard/service");
+    const ids = (await newHiresWithOpenItRequests()).flatMap((u) => u.requestsSubmitted.map((r) => r.id));
+    filters.push({ id: { in: ids } });
+  }
   if (q.q) {
     const n = Number(q.q.replace(/^#/, ""));
     filters.push({

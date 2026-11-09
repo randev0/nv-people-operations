@@ -158,6 +158,7 @@ async function main() {
             departmentId: deptId[k.dept], ownerId, dueDay: k.dueDay, dueDate: parseDateOnly(due), sortOrder: i,
             status: done ? "COMPLETED" : inProgress ? "IN_PROGRESS" : "NOT_STARTED",
             version: done ? 3 : inProgress ? 2 : 1, startedAt, completedAt,
+            updatedAt: completedAt ?? startedAt ?? at(ref, hire.joinedDaysAgo + 3, 3),
           },
         });
         const events: Prisma.TaskEventCreateManyInput[] = [];
@@ -240,6 +241,7 @@ async function main() {
         data: {
           id, title, description, categoryId: categoryId[cat], priority, status, requesterId: uid(requester.key),
           assigneeId: assignee ? uid(assignee.key) : null, version: versions, createdAt: created,
+          updatedAt: [created, assignedAt, startedAt, resolvedAt, closedAt][stage], // last lifecycle change, not seed time
           resolvedAt: stage >= 3 ? resolvedAt : null, closedAt: stage >= 4 ? closedAt : null,
         },
       }),

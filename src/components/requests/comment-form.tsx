@@ -30,8 +30,8 @@ export function CommentForm({ requestId }: { requestId: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="mt-4 space-y-2">
-      <Label htmlFor="comment">Add a comment</Label>
+    <form onSubmit={submit} className="space-y-2">
+      <Label htmlFor="comment" className="text-sm font-semibold">Add a comment</Label>
       <Textarea id="comment" rows={3} maxLength={3000} value={body} onChange={(e) => setBody(e.target.value)} />
       {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
       <Button type="submit" size="sm" disabled={pending || !body.trim()}>{pending ? "Posting…" : "Post comment"}</Button>

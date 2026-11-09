@@ -2,7 +2,7 @@
 
 Three issues observed during development, written up in the required format. Raw notes are in `WORKLOG.md`.
 
-**Honest classification:** only Bug 1 is a significant application security defect found at runtime. Bug 2 is a real but lower-severity application defect (it only shows when client JavaScript fails to load). Bug 3 was a genuine defect in the test suite, not in the application. No bugs were introduced deliberately and none of these were described before they were observed. Static concerns about the donor repository (missing per-record checks in its ticket routes) are **not** included because they were never reproduced here.
+**Honest classification:** only Bug 1 is a significant application security defect found at runtime. Bug 2 is a real but lower-severity application defect (it only shows when client JavaScript fails to load). Bug 3 is a genuine styling defect inherited from the donor token format; it hid UI feedback but had no security or data impact. No bugs were introduced deliberately and none of these were described before they were observed. Static concerns about the donor repository (missing per-record checks in its ticket routes) are **not** included because they were never reproduced here.
 
 ---
 
@@ -71,32 +71,25 @@ The same run's console showed `Refused to execute script from '…/_next/static/
 
 ---
 
-## Bug 3 — Integration test depended on another file's side effects (test-suite defect)
+## Bug 3 — Tailwind opacity classes generated no CSS, so chart bars and hover states were invisible
 
-**Affected commit/date:** `36be90d` (pre-commit run), 2026-11-09.
+**Affected commit/date:** `b4c8a08` (first adapted UI primitives) through `9709361`, found 2026-11-09 during the UI redesign.
 
-**Symptom:** the first full integration run was 22/23. `O06/O07/O08/O09` failed at `onboarding.test.ts:120`:
-
-```text
-Expected values to be strictly equal:
-200 !== 422
-```
-
-Starting "Complete security briefing" succeeded even though its prerequisite "Create company account" was seeded as IN_PROGRESS.
+**Symptom:** reviewing a 1440 px screenshot of the HR dashboard, every bar in the three charts was an empty grey track, while the numbers next to them (8 / 8 / 8 …) were correct.
 
 **Investigation:**
-- First hypothesis: a real prerequisite-check bug in `transitionTask`. Checked the service: it reads prerequisites inside the locked transaction and rejects any that are not COMPLETED, and the unit tests for `effectiveStatus` pass. If the prerequisite really was incomplete, a 200 would be impossible, so the data had to have changed.
-- Second hypothesis: an earlier test mutated the fixture. `node:test` runs files alphabetically, so `dashboard-ai.test.ts` (D03) ran before `onboarding.test.ts`. D03 completes "the first IN_PROGRESS overdue task", using `findMany` with no `orderBy`. In a fresh seed that is employee.my's `account` task, which unblocks `security`.
+- First hypothesis: zero widths. Ruled out: the text values were non-zero and the DOM showed the inline `style="width: 62%"` on each fill element.
+- Second hypothesis: the fill had no colour. Grepped the compiled CSS in `.next/static/css`: `.bg-primary{background-color:var(--primary)}` existed, but `.bg-primary\/85` was absent. So were `hover:bg-primary/90`, `hover:bg-muted/40`, `bg-primary/20` and `bg-destructive/90`.
+- Tailwind only emits an opacity-modified colour when it can inject the alpha. The donor mapping `primary: "var(--primary)"` with `--primary` holding a complete colour gives it nowhere to do that, so each `/NN` class was dropped silently, with no build warning.
 
-**Root cause:** shared seeded state plus non-deterministic selection in D03 (`tests/integration/dashboard-ai.test.ts`).
+**Root cause:** the colour-token format adapted from the donor (`tailwind.config.ts`, `src/app/globals.css`) was incompatible with Tailwind opacity modifiers. Since the first UI commit, button hover states, table-row hover, progress-bar tracks and destructive hovers had also been invisible.
 
-**Fix:** D03 now excludes employee.my's checklist and orders by id:
+**Fix:** (UI redesign commit) tokens are HSL channels (`--primary: 244 52% 44%`) and the config maps `primary: "hsl(var(--primary) / <alpha-value>)"` for every colour.
 
-```ts
-where: { status: "IN_PROGRESS", onboarding: { employee: { email: { not: "employee.my@example.com" } } } },
-orderBy: { id: "asc" },
-```
+**Verification:** after rebuilding, the compiled CSS contains `.bg-primary\/85{background-color:hsl(var(--primary) / .85)}`. The dashboard screenshot shows filled bars, and the axe scan (15 pages, 0 violations, which includes colour contrast) still passes.
 
-**Verification:** the next three runs were 23/23.
+**Prevention:** proposed, not implemented: a build-time check that greps the compiled CSS for a few known opacity classes.
 
-**Prevention:** each run uses a fresh database (`tests/integration/run.ts`). Tests that mutate shared fixtures should create their own data (as O03/O12 already do).
+---
+
+_Earlier draft of this log listed a test-suite isolation defect (integration D03 mutating a shared fixture) as Bug 3. It was a genuine but minor test-only issue and is kept in `WORKLOG.md`._

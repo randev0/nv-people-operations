@@ -7,7 +7,11 @@ export const taskInclude = {
   department: { select: { id: true, name: true } },
   owner: { select: userSummarySelect },
   prerequisites: {
-    select: { prerequisiteTask: { select: { id: true, title: true, status: true } } },
+    select: {
+      prerequisiteTask: {
+        select: { id: true, title: true, status: true, department: { select: { name: true } }, owner: { select: { name: true } } },
+      },
+    },
   },
 } satisfies Prisma.OnboardingTaskInclude;
 
@@ -28,12 +32,15 @@ export type TaskDTO = {
   version: number;
   startedAt: string | null;
   completedAt: string | null;
-  prerequisites: { id: string; title: string; status: TaskRow["status"] }[];
+  /** departmentName/ownerName let the UI explain a block in plain language. */
+  prerequisites: { id: string; title: string; status: TaskRow["status"]; departmentName: string; ownerName: string }[];
   allowedActions: ("START" | "COMPLETE")[];
 };
 
 export function toTaskDTO(t: TaskRow, timezone: string, actorId: string, now: Date): TaskDTO {
-  const prerequisites = t.prerequisites.map((p) => p.prerequisiteTask).sort((a, b) => a.title.localeCompare(b.title));
+  const prerequisites = t.prerequisites
+    .map(({ prerequisiteTask: p }) => ({ id: p.id, title: p.title, status: p.status, departmentName: p.department.name, ownerName: p.owner.name }))
+    .sort((a, b) => a.title.localeCompare(b.title));
   const eff = effectiveStatus(t.status, prerequisites);
   const dueDate = formatDateOnly(t.dueDate);
   const allowedActions: TaskDTO["allowedActions"] = [];

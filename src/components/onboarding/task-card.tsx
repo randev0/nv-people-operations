@@ -1,14 +1,16 @@
 "use client";
 
-// Adapted from ERACare src/components/tasks/TaskCard.tsx: status icon + card layout kept;
-// project/contract/time-log fields removed; added blocked reason, overdue flag, owner actions.
+// Adapted from ERACare src/components/tasks/TaskCard.tsx (status icon + owner/due layout),
+// restyled as a GOV.UK-style task-list row: title, plain-language block reason, owner,
+// due date and a status tag, with the owner's actions inline.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Clock, Lock, Play } from "lucide-react";
+import { CheckCircle2, Circle, Lock, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OverdueBadge, StatusBadge } from "@/components/common/status-badge";
+import { Avatar } from "@/components/common/surface";
 import { api, ApiError, errorText } from "@/lib/api";
-import { formatCalendarDate, formatDueDay, STATUS_LABEL } from "@/lib/format";
+import { formatCalendarDate, formatDueDay, lowerFirst } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export type TaskView = {
@@ -23,76 +25,100 @@ export type TaskView = {
   effectiveStatus: string;
   isOverdue: boolean;
   version: number;
-  prerequisites: { id: string; title: string; status: string }[];
+  prerequisites: { id: string; title: string; status: string; departmentName: string; ownerName: string }[];
   allowedActions: ("START" | "COMPLETE")[];
   hire?: { id: string; name: string; department: { name: string } };
 };
 
+/** "Waiting for IT to create company account" — names who is blocking and what they must do. */
+export function blockedReason(prereqs: TaskView["prerequisites"]): string {
+  const open = prereqs.filter((p) => p.status !== "COMPLETED");
+  if (!open.length) return "";
+  const parts = open.map((p) => {
+    const who = p.departmentName === "Manager" ? "the manager" : p.departmentName;
+    return `${who} to ${lowerFirst(p.title)}${p.status === "IN_PROGRESS" ? " (in progress)" : ""}`;
+  });
+  return `Waiting for ${parts.join(", and for ")}`;
+}
+
 function StatusIcon({ s }: { s: string }) {
-  const cls = "h-4 w-4 shrink-0";
-  if (s === "COMPLETED") return <CheckCircle2 className={cn(cls, "text-emerald-700")} aria-hidden />;
-  if (s === "IN_PROGRESS") return <Play className={cn(cls, "text-sky-700")} aria-hidden />;
-  if (s === "BLOCKED") return <Lock className={cn(cls, "text-amber-700")} aria-hidden />;
-  return <Clock className={cn(cls, "text-muted-foreground")} aria-hidden />;
+  const cls = "mt-0.5 h-5 w-5 shrink-0";
+  if (s === "COMPLETED") return <CheckCircle2 className={cn(cls, "text-emerald-600")} aria-hidden />;
+  if (s === "IN_PROGRESS") return <PlayCircle className={cn(cls, "text-primary")} aria-hidden />;
+  if (s === "BLOCKED") return <Lock className={cn(cls, "text-amber-600")} aria-hidden />;
+  return <Circle className={cn(cls, "text-muted-foreground/60")} aria-hidden />;
 }
 
 export function TaskCard({ task, timezone, showHire = false }: { task: TaskView; timezone?: string; showHire?: boolean }) {
   const router = useRouter();
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState<"START" | "COMPLETE" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const blocking = task.prerequisites.filter((p) => p.status !== "COMPLETED");
+  const [done, setDone] = useState<string | null>(null);
 
   async function act(action: "START" | "COMPLETE") {
-    setPending(true);
+    setPending(action);
     setError(null);
+    setDone(null);
     try {
       await api(`/onboarding-tasks/${task.id}/transition`, { method: "POST", body: { action, expectedVersion: task.version } });
+      setDone(action === "START" ? "Started" : "Completed — dependent tasks are now unblocked if this was their last prerequisite.");
       router.refresh();
     } catch (err) {
       setError(errorText(err));
       if (err instanceof ApiError && err.code === "STALE_VERSION") router.refresh();
     } finally {
-      setPending(false);
+      setPending(null);
     }
   }
 
+  const reason = task.effectiveStatus === "BLOCKED" ? blockedReason(task.prerequisites) : null;
+
   return (
-    <article className={cn("rounded-lg border bg-card p-4", task.isOverdue && "border-red-300")} aria-label={task.title}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex min-w-0 items-start gap-2">
-          <StatusIcon s={task.effectiveStatus} />
-          <div className="min-w-0">
-            <h3 className="font-medium leading-tight">{task.title}</h3>
-            {showHire && task.hire ? (
-              <p className="text-xs text-muted-foreground">New hire: {task.hire.name} · {task.hire.department.name}</p>
-            ) : null}
+    <li className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-start sm:justify-between" aria-label={task.title}>
+      <div className="flex min-w-0 gap-3">
+        <StatusIcon s={task.effectiveStatus} />
+        <div className="min-w-0">
+          <h3 className="font-medium leading-snug">{task.title}</h3>
+          {showHire && task.hire ? (
+            <p className="text-xs text-muted-foreground">for <span className="font-medium text-foreground">{task.hire.name}</span> · {task.hire.department.name}</p>
+          ) : null}
+          {task.description ? <p className="mt-0.5 text-sm text-muted-foreground">{task.description}</p> : null}
+          {reason ? (
+            <p className="mt-1.5 flex items-start gap-1.5 text-sm text-amber-900">
+              <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>
+                {reason}
+                <span className="block text-xs text-amber-800/80">
+                  {task.prerequisites.filter((p) => p.status !== "COMPLETED").map((p) => `${p.title} — ${p.ownerName}`).join(" · ")}
+                </span>
+              </span>
+            </p>
+          ) : null}
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><Avatar name={task.owner.name} /><span className="text-foreground">{task.owner.name}</span> · {task.department.name}</span>
+            <span>
+              Due <span className="font-medium text-foreground">{formatDueDay(task.dueDay)}</span> · {formatCalendarDate(task.dueDate)}
+              {timezone ? <span> ({timezone})</span> : null}
+            </span>
+          </p>
+          <div aria-live="polite" className="text-sm">
+            {error ? <p className="mt-1 text-destructive" role="alert">{error}</p> : null}
+            {done ? <p className="mt-1 text-emerald-700">{done}</p> : null}
           </div>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 pl-8 sm:flex-col sm:items-end sm:pl-0">
+        <div className="flex gap-1.5">
           <StatusBadge status={task.effectiveStatus} />
           {task.isOverdue ? <OverdueBadge /> : null}
         </div>
+        {task.allowedActions.includes("START") ? (
+          <Button size="sm" disabled={pending !== null} onClick={() => act("START")}>{pending ? "Saving…" : "Start task"}</Button>
+        ) : null}
+        {task.allowedActions.includes("COMPLETE") ? (
+          <Button size="sm" disabled={pending !== null} onClick={() => act("COMPLETE")}>{pending ? "Saving…" : "Mark complete"}</Button>
+        ) : null}
       </div>
-      {task.description ? <p className="mt-2 text-sm text-muted-foreground">{task.description}</p> : null}
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
-        <div className="col-span-2 sm:col-span-3"><dt className="inline text-muted-foreground">Due: </dt><dd className="inline"><span className="font-medium">{formatDueDay(task.dueDay)}</span> · {formatCalendarDate(task.dueDate)}{timezone ? <span className="text-muted-foreground"> · {timezone}</span> : null}</dd></div>
-        <div><dt className="inline text-muted-foreground">Team: </dt><dd className="inline">{task.department.name}</dd></div>
-        <div><dt className="inline text-muted-foreground">Owner: </dt><dd className="inline">{task.owner.name}</dd></div>
-      </dl>
-      {task.effectiveStatus === "BLOCKED" ? (
-        <p className="mt-2 text-sm text-amber-900">
-          Waiting on: {blocking.map((b) => `${b.title} (${STATUS_LABEL[b.status]})`).join(", ")}
-        </p>
-      ) : task.prerequisites.length ? (
-        <p className="mt-2 text-xs text-muted-foreground">After: {task.prerequisites.map((p) => p.title).join(", ")}</p>
-      ) : null}
-      {error ? <p className="mt-2 text-sm text-destructive" role="alert">{error}</p> : null}
-      {task.allowedActions.length ? (
-        <div className="mt-3 flex gap-2">
-          {task.allowedActions.includes("START") ? <Button size="sm" disabled={pending} onClick={() => act("START")}>{pending ? "Saving…" : "Start task"}</Button> : null}
-          {task.allowedActions.includes("COMPLETE") ? <Button size="sm" disabled={pending} onClick={() => act("COMPLETE")}>{pending ? "Saving…" : "Mark complete"}</Button> : null}
-        </div>
-      ) : null}
-    </article>
+    </li>
   );
 }

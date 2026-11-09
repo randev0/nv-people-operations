@@ -4,23 +4,23 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium leading-5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
     variants: {
       variant: {
         default:
           "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
         secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "border-border bg-secondary text-secondary-foreground",
         destructive:
           "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
         outline: "text-foreground",
         // Added for People Operations status badges (text always present; colour is secondary).
-        success: "border-transparent bg-emerald-100 text-emerald-900",
-        warning: "border-transparent bg-amber-100 text-amber-900",
-        danger: "border-transparent bg-red-100 text-red-900",
-        info: "border-transparent bg-sky-100 text-sky-900",
-        muted: "border-transparent bg-muted text-muted-foreground",
+        success: "border-emerald-200 bg-emerald-50 text-emerald-800",
+        warning: "border-amber-200 bg-amber-50 text-amber-900",
+        danger: "border-red-200 bg-red-50 text-red-800",
+        info: "border-indigo-200 bg-indigo-50 text-indigo-800",
+        muted: "border-border bg-muted text-muted-foreground",
       },
     },
     defaultVariants: {

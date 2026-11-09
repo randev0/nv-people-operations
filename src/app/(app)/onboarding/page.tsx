@@ -42,7 +42,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
     <>
       <PageHeader
         title="Onboarding"
-        description={isHrAdmin(me) ? "Every new hire's checklist progress." : "Checklists for your direct reports."}
+        description={isHrAdmin(me) ? "Progress by new hire. Open a row to see the checklist." : "Your direct reports' checklists. Open a row to see the tasks."}
         actions={
           <>
             {own ? <Button asChild variant="outline"><Link href={`/onboarding/${own}`}>My checklist</Link></Button> : null}
@@ -59,31 +59,38 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         ))}
       </nav>
       {data.length === 0 ? (
-        <EmptyState title="No onboarding checklists here yet." />
+        <EmptyState title="No onboarding checklists here yet.">{isHrAdmin(me) ? "Assign a checklist to a new hire to start tracking it." : null}</EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-lg border bg-card">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>New hire</TableHead>
-                <TableHead className="hidden md:table-cell">Country</TableHead>
-                <TableHead className="hidden md:table-cell">Start date</TableHead>
+                <TableHead className="hidden md:table-cell">Started</TableHead>
                 <TableHead className="hidden lg:table-cell">Template</TableHead>
                 <TableHead>Progress</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Completed</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Pending</TableHead>
+                <TableHead className="text-right">Overdue</TableHead>
+                <TableHead className="text-right">Blocked</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.map((o) => (
                 <TableRow key={o.id}>
-                  <TableCell>
-                    <Link href={`/onboarding/${o.id}`} className="font-medium text-primary hover:underline">{o.employee.name}</Link>
-                    <p className="text-xs text-muted-foreground">{o.employee.department.name}</p>
-                    {o.completedAt ? <Badge variant="success" className="mt-1">Complete</Badge> : null}
+                  <TableCell className="min-w-[12rem]">
+                    <Link href={`/onboarding/${o.id}`} className="font-medium hover:text-primary hover:underline">{o.employee.name}</Link>
+                    <p className="text-xs text-muted-foreground">{o.employee.department.name} · {COUNTRY_LABEL[o.employee.countryCode]}</p>
                   </TableCell>
-                  <TableCell className="hidden md:table-cell">{COUNTRY_LABEL[o.employee.countryCode]}</TableCell>
-                  <TableCell className="hidden md:table-cell">{formatCalendarDate(o.startDate)}</TableCell>
+                  <TableCell className="hidden whitespace-nowrap md:table-cell">{formatCalendarDate(o.startDate)}</TableCell>
                   <TableCell className="hidden lg:table-cell">{o.templateName}</TableCell>
-                  <TableCell><ProgressSummary p={o.progress} compact /></TableCell>
+                  <TableCell>
+                    {o.completedAt ? <Badge variant="success">Complete</Badge> : <ProgressSummary p={o.progress} />}
+                  </TableCell>
+                  <TableCell className="hidden text-right tabular-nums sm:table-cell">{o.progress.completed}</TableCell>
+                  <TableCell className="hidden text-right tabular-nums sm:table-cell">{o.progress.pending}</TableCell>
+                  <TableCell className={cn("text-right tabular-nums", o.progress.overdue ? "font-semibold text-red-700" : "text-muted-foreground")}>{o.progress.overdue}</TableCell>
+                  <TableCell className={cn("text-right tabular-nums", o.progress.blocked ? "font-semibold text-amber-800" : "text-muted-foreground")}>{o.progress.blocked}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

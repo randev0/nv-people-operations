@@ -72,8 +72,8 @@ export function AiSuggestionPanel({
   if (s.status === "NONE" && !s.canRegenerate) return null;
 
   return (
-    <section className="rounded-lg border border-primary/30 bg-card p-4 text-sm" aria-labelledby="ai-sugg" aria-live="polite">
-      <h2 id="ai-sugg" className="flex items-center gap-1.5 font-medium">
+    <section className="rounded-lg border border-indigo-200 bg-card p-4 text-sm shadow-[0_1px_2px_rgba(28,25,23,0.04)]" aria-labelledby="ai-sugg" aria-live="polite">
+      <h2 id="ai-sugg" className="flex items-center gap-1.5 text-sm font-semibold">
         <Sparkles className="h-4 w-4 text-primary" aria-hidden /> AI routing suggestion
       </h2>
       {s.status === "PENDING" ? <p className="mt-2 text-muted-foreground">Analysing the description…</p> : null}

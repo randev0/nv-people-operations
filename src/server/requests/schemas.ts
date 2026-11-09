@@ -32,6 +32,8 @@ export const listRequestsQuery = z
     priority: z.enum(PRIORITIES).optional(),
     countryCode: z.enum(["BD", "MY", "LK", "CY"]).optional(),
     scope: z.enum(["mine", "team", "assigned", "all"]).default("mine"),
+    /** Records behind a dashboard number (HR only). */
+    insight: z.enum(["new-hires-it"]).optional(),
   })
   .strict();
 

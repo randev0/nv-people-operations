@@ -15,11 +15,38 @@ async function overdueTaskCount(where: { onboarding?: object; ownerId?: string }
   return tasks.filter((t) => isOverdue({ status: t.status, dueDate: formatDateOnly(t.dueDate) }, t.onboarding.timezone, asOf)).length;
 }
 
+/**
+ * Cross-module insight, single definition used by the dashboard card AND the request
+ * queue filter behind it: employees who joined 0–60 days ago (in their own timezone),
+ * have an onboarding checklist, and have open IT-equipment requests.
+ */
+export async function newHiresWithOpenItRequests(asOf: Date = new Date()) {
+  const cutoff = addCalendarDays(asOf.toISOString().slice(0, 10), -61); // coarse DB pre-filter
+  const rows = await db.user.findMany({
+    where: {
+      joiningDate: { gte: new Date(`${cutoff}T00:00:00Z`) },
+      onboarding: { isNot: null },
+      requestsSubmitted: { some: { status: { in: [...OPEN_STATUSES] }, category: { code: "IT_EQUIPMENT" } } },
+    },
+    select: {
+      id: true, name: true, countryCode: true, joiningDate: true,
+      requestsSubmitted: {
+        where: { status: { in: [...OPEN_STATUSES] }, category: { code: "IT_EQUIPMENT" } },
+        select: { id: true, number: true },
+        orderBy: { number: "asc" },
+      },
+    },
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+  });
+  return rows.filter((u) => {
+    const days = daysBetween(formatDateOnly(u.joiningDate), todayIn(COUNTRY_TIMEZONES[u.countryCode], asOf));
+    return days >= 0 && days <= 60;
+  });
+}
+
 export async function orgDashboard(actor: Actor) {
   if (!canViewOrgDashboard(actor)) throw forbidden("The organisation dashboard is available to HR admins.");
   const asOf = new Date();
-  // Coarse DB pre-filter (UTC date − 61 days); exact 0–60 day window applied per hire's timezone below.
-  const cutoff = addCalendarDays(asOf.toISOString().slice(0, 10), -61);
 
   const [headcount, byStatus, byCategoryRaw, categories, activeHires, insightRows] = await Promise.all([
     db.user.groupBy({ by: ["countryCode"], _count: { _all: true }, orderBy: { countryCode: "asc" } }),
@@ -27,22 +54,7 @@ export async function orgDashboard(actor: Actor) {
     db.serviceRequest.groupBy({ by: ["categoryId"], where: { status: { in: [...OPEN_STATUSES] }, createdAt: { lte: asOf } }, _count: { _all: true } }),
     db.requestCategory.findMany({ select: { id: true, code: true, name: true }, orderBy: { name: "asc" } }),
     db.onboarding.count({ where: { tasks: { some: { status: { not: "COMPLETED" } } } } }),
-    db.user.findMany({
-      where: {
-        joiningDate: { gte: new Date(`${cutoff}T00:00:00Z`) },
-        onboarding: { isNot: null },
-        requestsSubmitted: { some: { status: { in: [...OPEN_STATUSES] }, category: { code: "IT_EQUIPMENT" } } },
-      },
-      select: {
-        id: true, name: true, countryCode: true, joiningDate: true,
-        requestsSubmitted: {
-          where: { status: { in: [...OPEN_STATUSES] }, category: { code: "IT_EQUIPMENT" } },
-          select: { id: true, number: true },
-          orderBy: { number: "asc" },
-        },
-      },
-      orderBy: [{ name: "asc" }, { id: "asc" }],
-    }),
+    newHiresWithOpenItRequests(asOf),
   ]);
   const overdueTasks = await overdueTaskCount({ onboarding: { tasks: { some: { status: { not: "COMPLETED" } } } } }, asOf);
 
@@ -56,12 +68,7 @@ export async function orgDashboard(actor: Actor) {
       byCategory: categories.map((c) => ({ code: c.code, name: c.name, count: catCount.get(c.id) ?? 0 })),
     },
     onboarding: { activeHires, overdueTasks },
-    newHiresWithOpenITRequests: insightRows
-      .filter((u) => {
-        const days = daysBetween(formatDateOnly(u.joiningDate), todayIn(COUNTRY_TIMEZONES[u.countryCode], asOf));
-        return days >= 0 && days <= 60;
-      })
-      .map((u) => ({
+    newHiresWithOpenITRequests: insightRows.map((u) => ({
       employeeId: u.id,
       name: u.name,
       countryCode: u.countryCode,
@@ -92,16 +99,17 @@ export async function myDashboard(actor: Actor) {
         percent: Math.round((own.tasks.filter((t) => t.status === "COMPLETED").length / Math.max(own.tasks.length, 1)) * 100),
       }
     : null;
-  let team: { openRequests: number; activeOnboardings: number; overdueTasks: number; directReports: number } | undefined;
+  let team: { openRequests: number; unassigned: number; activeOnboardings: number; overdueTasks: number; directReports: number } | undefined;
   if (isManager(actor)) {
     const reportScope = { managerId: actor.id };
-    const [openRequests, activeOnboardings, overdueTasks, directReports] = await Promise.all([
+    const [openRequests, unassigned, activeOnboardings, overdueTasks, directReports] = await Promise.all([
       db.serviceRequest.count({ where: { requester: reportScope, status: { in: [...OPEN_STATUSES] } } }),
+      db.serviceRequest.count({ where: { requester: reportScope, status: "SUBMITTED" } }),
       db.onboarding.count({ where: { employee: reportScope, completedAt: null } }),
       overdueTaskCount({ onboarding: { employee: reportScope } }, asOf),
       db.user.count({ where: reportScope }),
     ]);
-    team = { openRequests, activeOnboardings, overdueTasks, directReports };
+    team = { openRequests, unassigned, activeOnboardings, overdueTasks, directReports };
   }
   return { myOpenRequests, myAssignedRequests, myPendingTasks, myOverdueTasks, myOnboardingProgress, ...(team ? { team } : {}), asOf: asOf.toISOString() };
 }

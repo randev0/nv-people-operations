@@ -441,7 +441,7 @@ Full request and response types (DTOs) are in **[docs/API_CONTRACT.md](docs/API_
 
 | Method | Path | Request → Response | Who |
 | --- | --- | --- | --- |
-| GET | /requests | `scope=mine\|assigned\|team\|all, status, categoryId, priority, countryCode, q, page` → RequestDTO[] (each with `allowedActions`) | `team`: Manager/HR · `all`: HR |
+| GET | /requests | `scope=mine\|assigned\|team\|all, status, categoryId, priority, countryCode, q, page, insight=new-hires-it` → RequestDTO[] (each with `allowedActions`) | `team`: Manager/HR · `all`, `insight`: HR |
 | POST | /requests | `{title,description,categoryId,priority}` → RequestDTO (201); triggers the AI suggestion in the background | Signed in (requester = self) |
 | GET | /requests/:id | → RequestDTO | Read scope |
 | GET / POST | /requests/:id/comments | `{body}` → CommentDTO[] / CommentDTO | Read scope |
@@ -684,7 +684,7 @@ Each decision is written as a short Architecture Decision Record: **context → 
 | **Observability** | One-line JSON logs with a request ID on every error response; journald via systemd; `/api/health` for uptime checks |
 | **Performance and scale** | Indexes per query (§2.2); pagination everywhere (max 100); at ~100 users the overdue/blocked derivation is in-memory per owner — see ADR-5 for scaling |
 | **Accessibility and UX** | Labelled inputs, visible focus, skip link, keyboard-usable controls and dialogs (focus trapped, Escape returns focus), status shown as text (not colour alone), charts paired with value tables; automated axe WCAG 2.1 A/AA scan of 15 pages with zero violations; verified at 390 px with no horizontal scroll |
-| **Testing** | 33 unit (pure policy, state, dates, DAG, deadline labels, AI validation and providers) · 27 integration (HTTP against a fresh database per run: concurrency, negative access, AI failure/invalid/timeout paths via a fake AI bridge) · 8 Playwright end-to-end (core flows, keyboard-only use, dialog focus trap, axe WCAG 2.1 AA scan of 15 pages, 390 px layout) · seed verification (22 checks). Evidence in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
+| **Testing** | 33 unit (pure policy, state, dates, DAG, deadline labels, AI validation and providers) · 27 integration (HTTP against a fresh database per run: concurrency, negative access, AI failure/invalid/timeout paths via a fake AI bridge) · 11 Playwright end-to-end (core flows, filter persistence across detail and back, dashboard insight drill-down, keyboard-only use, dialog focus trap, axe WCAG 2.1 AA scan of 15 pages, 390 px layout) · seed verification (22 checks). Evidence in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
 
 ---
 
