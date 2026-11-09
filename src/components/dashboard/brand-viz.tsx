@@ -34,24 +34,6 @@ export function Sparkline({ values, className, id }: { values: number[]; classNa
   );
 }
 
-/**
- * Comparison with the previous equal-length window, stated with both numbers so the
- * reader never has to guess the baseline ("vs 3 in the 7 days before").
- */
-export function Delta({ now, prev, goodWhenUp, noun = "" }: { now: number; prev: number; goodWhenUp: boolean; noun?: string }) {
-  const diff = now - prev;
-  const tone = diff === 0 ? "text-muted-foreground" : diff > 0 === goodWhenUp ? "text-success" : "text-warning";
-  const arrow = diff === 0 ? "" : diff > 0 ? "▲ " : "▼ ";
-  return (
-    <span className="text-xs text-muted-foreground">
-      <span className={cn("font-medium", tone)}>
-        {arrow}
-        {diff === 0 ? "Same" : `${Math.abs(diff)} ${diff > 0 ? "more" : "fewer"}`}
-      </span>{" "}
-      {noun ? `${noun} ` : ""}than the 7 days before ({prev})
-    </span>
-  );
-}
 
 /**
  * Dotted map of the four offices. The SVG keeps the generated aspect ratio, and the

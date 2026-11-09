@@ -82,7 +82,7 @@
 }
 
 @layer components {
-  /* Dot grid canvas, as on nextventures.io */
+  /* Dot grid canvas */
   .dot-grid {
     background-image: radial-gradient(hsl(0 0% 100% / 0.07) 1px, transparent 1px);
     background-size: 22px 22px;
@@ -147,7 +147,7 @@
     animation: iri-flow 8s ease-in-out infinite alternate;
   }
 
-  /* Outlined display text, echoing the hollow "through" on nextventures.io */
+  /* Outlined display text (hollow letters) */
   .outline-text {
     color: transparent;
     -webkit-text-stroke: 1px hsl(0 0% 100% / 0.6);

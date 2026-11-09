@@ -6,11 +6,9 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, errorText } from "@/lib/api";
-import { AssignSheet } from "./assign-sheet";
-import { BulkAssignBar } from "./bulk-assign";
 import { cn } from "@/lib/utils";
 
-/** Serializable shape of a server WorkItem (see src/server/dashboard/work-queue.ts). */
+/** Serializable shape of a server WorkItem (see src/server/dashboard/work-queue.ts); used for the viewer's own work. */
 export type WorkRow = {
   key: string;
   tier: "OVERDUE" | "BLOCKING" | "URGENT" | "DUE_SOON" | "REQUEST" | "TASK" | "CONFIRM";
@@ -23,8 +21,7 @@ export type WorkRow = {
   action:
     | { kind: "task"; id: string; action: "START" | "COMPLETE"; version: number; label: string }
     | { kind: "request"; id: string; action: "START" | "RESOLVE" | "CLOSE"; version: number; label: string }
-    | { kind: "link"; href: string; label: string }
-    | { kind: "assign"; id: string; label: string };
+    | { kind: "link"; href: string; label: string };
 };
 
 // Coral only for problems (overdue); amber for things holding others up or high priority; neutral otherwise.
@@ -51,21 +48,9 @@ export function WorkList({ rows, emptyState }: { rows: WorkRow[]; emptyState: Re
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [done, setDone] = useState<string | null>(null);
   const confirmRef = useRef<HTMLDivElement>(null);
-  const [sheet, setSheet] = useState<{ id: string; title: string } | null>(null);
-  const sheetTrigger = useRef<HTMLButtonElement | null>(null);
-  const assignable = rows.filter((r) => r.action.kind === "assign");
-  const bulk = assignable.length >= 2;
-  const [picked, setPicked] = useState<string[]>([]);
-  const idOf = (r: WorkRow) => (r.action as { id: string }).id;
-  const visiblePicked = picked.filter((id) => assignable.some((r) => idOf(r) === id));
-
-  function confirm(message: string) {
-    setDone(message);
-    requestAnimationFrame(() => confirmRef.current?.focus());
-  }
 
   async function act(row: WorkRow) {
-    if (row.action.kind === "link" || row.action.kind === "assign") return;
+    if (row.action.kind === "link") return;
     const a = row.action;
     setPending(row.key);
     setErrors((e) => ({ ...e, [row.key]: "" }));
@@ -93,47 +78,12 @@ export function WorkList({ rows, emptyState }: { rows: WorkRow[]; emptyState: Re
           </p>
         ) : null}
       </div>
-      {bulk ? (
-        visiblePicked.length ? (
-          <BulkAssignBar
-            key={visiblePicked.join(",")}
-            selected={visiblePicked}
-            titles={Object.fromEntries(assignable.map((r) => [idOf(r), r.title]))}
-            onClear={() => setPicked([])}
-            onDone={(message) => {
-              setPicked([]);
-              router.refresh();
-              confirm(message);
-            }}
-          />
-        ) : (
-          <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-[hsl(var(--primary))]"
-              checked={false}
-              onChange={() => setPicked(assignable.map(idOf))}
-            />
-            Select all {assignable.length} shown to assign them to one person
-          </label>
-        )
-      ) : null}
       {rows.length === 0 ? (
         emptyState
       ) : (
         <ol className="divide-y rounded-2xl border bg-card">
           {rows.map((row) => (
             <li key={row.key} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-start gap-3">
-                {bulk && row.action.kind === "assign" ? (
-                  <input
-                    type="checkbox"
-                    className="mt-1.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
-                    aria-label={`Select “${row.title}” for bulk assign`}
-                    checked={picked.includes(idOf(row))}
-                    onChange={(e) => setPicked((p) => (e.target.checked ? [...p, idOf(row)] : p.filter((x) => x !== idOf(row))))}
-                  />
-                ) : null}
               <div className="min-w-0">
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium", TIER_STYLE[row.tier])}>{row.tierLabel}</span>
@@ -147,20 +97,8 @@ export function WorkList({ rows, emptyState }: { rows: WorkRow[]; emptyState: Re
                 </p>
                 {errors[row.key] ? <p role="alert" className="mt-1 text-sm text-destructive">{errors[row.key]}</p> : null}
               </div>
-              </div>
               <div className="shrink-0">
-                {row.action.kind === "assign" ? (
-                  <Button
-                    size="sm"
-                    aria-haspopup="dialog"
-                    onClick={(e) => {
-                      sheetTrigger.current = e.currentTarget;
-                      setSheet({ id: (row.action as { id: string }).id, title: row.title });
-                    }}
-                  >
-                    {row.action.label}<span className="sr-only">: {row.title}</span>
-                  </Button>
-                ) : row.action.kind === "link" ? (
+                {row.action.kind === "link" ? (
                   <Button asChild size="sm" variant="outline">
                     <Link href={row.action.href}>
                       {row.action.label}<span className="sr-only">: {row.title}</span> <ArrowRight aria-hidden />
@@ -177,23 +115,6 @@ export function WorkList({ rows, emptyState }: { rows: WorkRow[]; emptyState: Re
           ))}
         </ol>
       )}
-      {sheet ? (
-        <AssignSheet
-          requestId={sheet.id}
-          title={sheet.title}
-          open
-          onOpenChange={(o) => {
-            if (o) return;
-            setSheet(null);
-            // Closed without assigning: return focus to the button that opened the sheet.
-            requestAnimationFrame(() => sheetTrigger.current?.focus());
-          }}
-          onAssigned={(message) => {
-            setSheet(null);
-            confirm(message);
-          }}
-        />
-      ) : null}
     </>
   );
 }

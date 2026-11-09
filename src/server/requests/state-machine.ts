@@ -17,10 +17,6 @@ export function transitionTarget(action: TransitionAction, current: RequestStatu
   return t.from === current ? t.to : null;
 }
 
-export function transitionSource(action: TransitionAction): RequestStatus {
-  return TRANSITIONS[action].from;
-}
-
 /** Assignment is allowed from SUBMITTED (assign) or ASSIGNED (reassign, before work starts). */
 export function assignmentKind(current: RequestStatus): "ASSIGN" | "REASSIGN" | null {
   if (current === "SUBMITTED") return "ASSIGN";

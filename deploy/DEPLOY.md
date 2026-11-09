@@ -39,7 +39,7 @@ Seeding was run **once** on 2026-11-09 (`ALLOW_ASSESSMENT_SEED=true npx tsx pris
 
 ## AI provider on the VPS: Codex bridge (dedicated ChatGPT login)
 
-At the candidate's request the live AI router uses their ChatGPT/Codex plan through the Codex CLI instead of an API key, with a **separate login session** so the existing Codex agents on the box are unaffected:
+The live AI router uses the owner's ChatGPT/Codex plan through the Codex CLI instead of an API key, with a **separate login session** so the existing Codex agents on the box are unaffected:
 
 | Piece | Where |
 | --- | --- |
@@ -50,7 +50,7 @@ At the candidate's request the live AI router uses their ChatGPT/Codex plan thro
 
 Each suggestion runs one ephemeral `codex exec` with model `gpt-6.1-sol`, read-only sandbox, `approval_policy=never`, web search off, shell/exec/browser/apps/plugins features disabled, an empty working directory, `--ignore-user-config`, and `--output-schema` (the same strict JSON schema); the app then validates the result against live database IDs as for any provider. Re-login: `sudo -u peopleops-ai env HOME=/var/lib/peopleops-ai CODEX_HOME=/var/lib/peopleops-ai/codex codex login --device-auth`. Status: `... codex login status`. Logs: `journalctl -u peopleops-ai`.
 
-Caveat (told to the candidate): this serves app users from a personal ChatGPT plan; OpenAI's docs recommend API keys for programmatic use, and plan rate limits apply. Switching to an API key needs only `AI_PROVIDER=openai` + `OPENAI_API_KEY`.
+Caveat: this serves app users from a personal ChatGPT plan; OpenAI's docs recommend API keys for programmatic use, and plan rate limits apply. Switching to an API key needs only `AI_PROVIDER=openai` + `OPENAI_API_KEY`.
 
 Alternative: the env file also supports `AI_PROVIDER=openai` and `OPENAI_MODEL=gpt-6.1-sol`; set `OPENAI_API_KEY=` (an OpenAI platform API key) in `/etc/peopleops/peopleops.env`, then `systemctl restart peopleops`. (Anthropic alternative: `AI_PROVIDER=anthropic` + `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL`.)
 

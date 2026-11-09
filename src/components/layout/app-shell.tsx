@@ -2,7 +2,7 @@
 
 // Adapted from ERACare src/components/DashboardLayout.tsx: same responsive sidebar +
 // mobile toggle pattern; typed user prop, role-based navigation, no AutoLogout/Header
-// dependencies and no persisted collapse state. Restyled for the NEXT brand (ink sidebar,
+// dependencies and no persisted collapse state. Restyled for the dark theme (ink sidebar,
 // crimson active rail, holographic orb mark).
 import { useEffect, useRef, useState } from "react";
 import { SessionExpiredBanner } from "./session-expired-banner";

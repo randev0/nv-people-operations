@@ -745,3 +745,8 @@ Dependencies (pinned): Next.js 16.4.5, React 19.3.1, Prisma 6.19.3, zod 4.6.7, i
 | 2026-11-09 | AI suggestion stored per request and run automatically after submit; the recommended person is shown to assigners. This closes the brief's "recommends which team/person to assign" requirement (ADR-3). |
 | 2026-11-09 | Router prompt amended after the first live run returned no person for clear IT cases: recommend someone from the suggested team, preferring the requester's country. |
 | 2026-11-09 | Onboarding owner can't be the hire themself; a request's assignee can't be its requester. |
+| 2026-11-10 | Dashboard split into Today (work) and Insights (reporting) for every role, after review feedback asking for less information at once; every figure still opens its filtered records. |
+| 2026-11-10 | Only the category's own team can be assigned a request; assigners can move a misfiled request to another category before work starts (recorded in its activity). |
+| 2026-11-10 | Disabling a login with open work requires handing it to a colleague in the same team, in one transaction. |
+| 2026-11-10 | Error handling completed after an exploratory test run (docs/QA_FINDINGS.md): branded error and 404 pages, plain-language validation, session-expiry banner with return path, nonce-based CSP. |
+

@@ -19,20 +19,6 @@ export function PanelHeader({ title, id, actions, className }: { title: ReactNod
   );
 }
 
-/** Label/value pairs for record sidebars (GitHub-style). */
-export function MetaList({ children, className }: { children: ReactNode; className?: string }) {
-  return <dl className={cn("divide-y", className)}>{children}</dl>;
-}
-
-export function MetaItem({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="px-5 py-3">
-      <dt className="eyebrow">{label}</dt>
-      <dd className="mt-1 text-sm">{children}</dd>
-    </div>
-  );
-}
-
 /** Deterministic hue from a name, so each person keeps their colour everywhere. */
 export function nameHue(name: string) {
   let h = 0;

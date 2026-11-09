@@ -4,9 +4,9 @@ Source (read-only donor): https://github.com/randev0/eracare-platform
 Commit used: `1db0431cfba5361866e435c0ed2141d08d940e4b` (committed 2026-02-17, cloned 2026-11-09).
 Production repository https://github.com/randev0/EraCare was **not** cloned, modified or used.
 
-Licensing: the donor repository has **no LICENSE file** at this commit. Public visibility alone does not establish licensing; the candidate should confirm ownership/permission for the donor code. Reuse is disclosed here for the assessor. The shadcn/ui primitives in the donor originate from shadcn/ui (MIT, https://github.com/shadcn-ui/ui); that notice is preserved in `THIRD_PARTY_NOTICES.md`.
+Licensing: the donor repository has **no LICENSE file** at this commit; it belongs to the same GitHub account as this project (`randev0`), so the reuse is by its owner. It is disclosed here for the assessor. The shadcn/ui primitives in the donor originate from shadcn/ui (MIT, https://github.com/shadcn-ui/ui); that notice is preserved in `THIRD_PARTY_NOTICES.md`.
 
-Never copied: API routes, Prisma schema/migrations, deployment/setup scripts, CLAUDE instructions, data, uploads, email integration, environment files.
+Never copied: API routes, Prisma schema/migrations, deployment/setup scripts, AI-assistant instruction files, data, uploads, email integration, environment files.
 
 | Source path | Destination | Treatment | Modifications | Reason |
 | --- | --- | --- | --- | --- |

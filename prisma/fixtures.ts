@@ -179,10 +179,6 @@ export const ONBOARDING_PLAN: { incomplete: string[] | null; inProgress: string[
   { incomplete: null, inProgress: [] },
 ];
 
-export type RequestFixture = {
-  key: string; title: string; description: string; category: (typeof CATEGORIES)[number]["code"];
-};
-
 /**
  * Who raised a request: one of the recent hires (by onboarding order), a named demo
  * account, or the first matching person in a department / country / status / role.
