@@ -82,7 +82,7 @@ export function NewRequestForm({ categories, departments }: { categories: Catego
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <form onSubmit={submit} className="space-y-4 rounded-lg border bg-card p-5" noValidate>
+      <form onSubmit={submit} method="post" className="space-y-4 rounded-lg border bg-card p-5" noValidate>
         {error ? (
           <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>
         ) : null}

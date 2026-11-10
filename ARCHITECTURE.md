@@ -433,7 +433,7 @@ Full request and response types (DTOs) are in **[docs/API_CONTRACT.md](docs/API_
 | GET | /employees | `q, countryCode, departmentId, employmentStatus, page` → EmployeeDTO[] | HR: all · Manager: self + direct reports · Employee: 403 |
 | POST | /employees | `{name,email,initialPassword,role,countryCode,departmentId,managerId,joiningDate,employmentStatus}` → EmployeeDTO | HR |
 | GET | /employees/:id | → EmployeeDTO | Self, their manager, HR (else 404) |
-| PATCH | /employees/:id | subset of fields above + `loginEnabled` → EmployeeDTO | HR; reporting-line rules checked |
+| PATCH | /employees/:id | subset of fields above + `loginEnabled`, `handOverToId` → EmployeeDTO | HR; reporting-line rules checked. Disabling someone with open requests or tasks needs `handOverToId` (same team) or returns 422 `OPEN_WORK` |
 | GET | /employees/manager-options | → UserSummary[] | HR |
 | GET | /countries · /departments · /request-categories | → lookup lists | Signed in |
 
@@ -447,7 +447,8 @@ Full request and response types (DTOs) are in **[docs/API_CONTRACT.md](docs/API_
 | GET / POST | /requests/:id/comments | `{body}` → CommentDTO[] / CommentDTO | Read scope |
 | GET | /requests/:id/events | → RequestEventDTO[] (audit trail) | Read scope |
 | GET | /requests/:id/assignee-options | `q, departmentId` → UserSummary[] (≤100) | Can assign |
-| POST | /requests/:id/assign | `{assigneeId, expectedVersion}` → RequestDTO | HR or the requester's manager |
+| POST | /requests/:id/assign | `{assigneeId, expectedVersion}` → RequestDTO | HR or the requester's manager; assignee must be in the category's team |
+| POST | /requests/:id/category | `{categoryId, expectedVersion}` → RequestDTO (adds an activity comment) | Same as assign; before work starts (SUBMITTED / ASSIGNED) |
 | POST | /requests/:id/transition | `{action: START\|RESOLVE\|CLOSE, expectedVersion}` → RequestDTO | Per §5.1 |
 
 **Onboarding**
@@ -472,12 +473,7 @@ Full request and response types (DTOs) are in **[docs/API_CONTRACT.md](docs/API_
 | GET | /dashboard | → headcount by country, open requests by status/category, active hires, overdue tasks, cross-module insight, `asOf` | HR |
 | GET | /dashboard/mine | → personal counts (+ team counts for a manager) | Signed in |
 
-The dashboard has two views in one 1080 px column, chosen by `?tab=` (Today by default; `insights` for every role, scoped: organisation for HR, team for managers, their own requests, work and checklist for employees). **Today**: compact header (greeting in the viewer's office time; the four office clocks always visible beside it, open/closed in text, offset and hours on hover); four role-specific figures, each linked to its list, with an icon, one line of context and, for HR, a thin meter for the share behind it (in progress of open, unassigned of open, tasks done in active checklists, blocked of overdue); "Needs your attention" with one work list at a time behind ARIA tabs with live counts: *Assign requests* (submitted requests the viewer may assign, from `workQueue`), *Onboarding follow-ups* (`overdueToChase`) and, for HR/managers only when non-empty, *Your tasks* (the rest of `workQueue`); employees get Your tasks alone. The initial tab is `?list=` if valid, else the first with items; switching tabs updates `?list=` with `history.replaceState`, so refreshes and reloads keep it. Each tab shows three rows and "View all": `/requests?scope=all|team&status=SUBMITTED&sort=priority`, `/onboarding/overdue?owner=others`, `/my-work`; counts, rows and destinations use the same predicates. Request rows show priority, title, employee, category, age and Assign; follow-up rows show days overdue, title, employee, owner and Review task (dates, dependencies and history are on the checklist). Assign opens a side sheet with the request's description and context, the AI suggestion and the eligible-person picker (search; AI-suggested person, the category's team, everyone else). A refused submission (409: stale version or no longer assignable) reloads the request in the sheet and says whether it is still unassigned or who has it. Select reveals checkboxes over every assignable request with a count, Select all, Cancel and the bulk bar (people eligible for all selected; one versioned assign per request; per-request outcome). After any action the page data refreshes, the next row moves up and a confirmation is announced. Below the list, the "IT equipment for new hires" card (from `todayInsight`: people and requests counted separately, oldest age) links to `insight=new-hires-it`. **Up next** (`upNext`) lists up to three steps with live counts, each opening its exact records through the request list's own filters: requests assigned or in progress with no change for 5+ days (`stalled=5-days`), resolved requests waiting to be closed (`status=RESOLVED`), and Insights; zero-count steps are dropped and a standing step fills in. Employees get their open requests, their checklist and New request. A row of role-specific shortcuts follows. **Insights**: overdue onboarding tasks (total, blocked, by office, each opening `/onboarding/overdue` with that filter), IT equipment for new hires (hires and requests counted separately), onboarding progress per active checklist, then requests by status (by age) and category, headcount by office (map and table) and the 7-day request flow. Managers see their team's overdue, equipment and progress panels and their own figures; organisation charts are HR-only. The Onboarding page carries "Onboarding now": checklists with overdue or blocked tasks, most overdue first.
-
-Request page layout: one column (960 px max): header with status, priority, category, requester, assignee and dates; a "Next step" block that shows only what the viewer can do now (assign with the AI suggestion and picker, or start / resolve / close, or a plain status sentence); then description, activity and comments.
-
-The work queue (`src/server/dashboard/work-queue.ts`) only contains work the viewer can act on, each record once:
-own onboarding tasks they can start or complete (blocked tasks are excluded), requests assigned to them that they can start or resolve, submitted requests they may assign (`canAssignRequest`), and resolved requests they raised (to close). A separate follow-up list (`overdueToChase`, shown as "Onboarding follow-ups") holds overdue tasks owned by someone else in checklists the viewer oversees (HR: all; managers: direct reports), most overdue first; the viewer's own tasks never appear there. Order, first matching rule wins: 1 overdue own task (most days overdue, then most tasks blocked) · 2 own task blocking other tasks (most blocked, then earliest due) · 3 urgent/high request (urgent first, then oldest) · 4 own task due today or tomorrow · 5 other request (oldest) · 6 other own task (earliest due) · 7 resolved request to confirm (longest resolved). Ties break on title, then id. Each row names its rule, the person affected, one reason line and one action; actions use the existing transition endpoints, then the list refreshes and a confirmation is announced.
+The dashboard returns data for two views per role: **Today** (a work queue of things the viewer can act on now, plus follow-ups on overdue onboarding tasks they oversee) and **Insights** (reporting, scoped to the organisation for HR, the team for managers and the viewer's own records for employees). Every figure links to a list filter with exactly the same definition. Screen layout, ordering rules and the work-queue algorithm (`src/server/dashboard/work-queue.ts`) are in **[docs/DASHBOARD.md](docs/DASHBOARD.md)**.
 
 **AI**
 
@@ -487,7 +483,7 @@ own onboarding tasks they can start or complete (blocked tasks are excluded), re
 | GET | /requests/:id/ai-suggestion | → stored suggestion (the person is included only for users who can assign) | Read scope |
 | POST | /requests/:id/ai-suggestion | → a fresh suggestion | Can assign; 10/min |
 
-**Operations:** `GET /health` → `{status:"ok"}` (public, reveals nothing about configuration).
+**Operations:** `GET /health` → `{status:"ok"}` (public, reveals nothing about configuration). `POST /client-errors` `{kind, message, digest?, path}` → 204: browser error reports, same-origin only, capped per minute, logged as `client.error`. Any other `/api/*` path answers a JSON 404.
 
 ---
 
@@ -500,7 +496,7 @@ own onboarding tasks they can start or complete (blocked tasks are excluded), re
 | Submit a request | ✔ own | ✔ own | ✔ own |
 | See requests | own + assigned to me | + direct reports' requests | all (filter by status, category, priority, country) |
 | Comment | on any request I can see | same | all |
-| Assign / reassign | — | direct reports' requests (not own) | all |
+| Assign / reassign (to the category's team), move to another category | — | direct reports' requests (not own) | all |
 | Start / resolve | only if I'm the assignee | same | same (no admin bypass) |
 | Close a resolved request | if I'm the requester | + direct reports' requests | all |
 | See onboarding checklist | own | own + direct reports | all |
@@ -543,7 +539,7 @@ flowchart TB
 - **Login hardening:**
   - bcrypt hashing, with a dummy hash check so unknown emails take the same time.
   - The same generic error for every failed login.
-  - Two throttles stored in the database: 10 attempts per 15 minutes per email + IP, and 30 per email regardless of IP.
+  - Two throttles stored in the database: 10 attempts per 15 minutes per email + IP (then 429), and, per email regardless of IP, a slowdown after 30 failures (1 s per attempt, up to 5 s) rather than a lock-out, so a public demo account can't be locked for everyone.
 
 ---
 
@@ -566,11 +562,12 @@ stateDiagram-v2
 | Transition | Guard (checked on the server) | Side effects (same transaction) |
 | --- | --- | --- |
 | Submit | Valid category and priority. Status, assignee and requester can't be supplied | `RequestEvent(CREATED)`. Background AI suggestion is queued |
-| Assign / Reassign | Actor can assign; the assignee is active and isn't the requester; status is SUBMITTED (assign) or ASSIGNED (reassign) | `assigneeId` set, `version+1`, `RequestEvent(ASSIGNED / REASSIGNED)` with previous and new assignee |
+| Assign / Reassign | Actor can assign; the assignee is active, isn't the requester and belongs to the category's team; status is SUBMITTED (assign) or ASSIGNED (reassign) | `assigneeId` set, `version+1`, `RequestEvent(ASSIGNED / REASSIGNED)` with previous and new assignee |
 | Start | Actor is the assignee; status is ASSIGNED | `version+1`, `RequestEvent(STATUS_CHANGED)` |
 | Resolve | Actor is the assignee; status is IN_PROGRESS | `resolvedAt`, `version+1`, event |
 | Close | Requester, their manager or HR; status is RESOLVED | `closedAt`, `version+1`, event |
 
+- **Misfiled requests:** an assigner can move a SUBMITTED or ASSIGNED request to another category (`POST /requests/:id/category`). Status is unchanged; the move is recorded as an activity comment, and an assignee outside the new category's team must be replaced first (422).
 - **No skipped states, reopening, cancelling or deleting.** There is no generic "set status" endpoint.
 - **Every change is concurrency-safe.** The update only applies if `(id, expectedVersion, current status)` still match; otherwise it returns 409. The audit event is written only if the change happened. A test fires two simultaneous assignments five times: exactly one succeeds each time, with exactly one event.
 
@@ -727,7 +724,8 @@ src/server/{people,requests,onboarding,dashboard,ai}   domain services
 src/components/{ui,layout,requests,onboarding,dashboard,employees}
 prisma/{schema.prisma,migrations,seed.ts,verify-seed.ts}
 tests/{unit,integration,e2e}            node:test + Playwright; per-run test database
-deploy/                                 systemd units, nginx vhost, Codex bridge, runbook
+deploy/                                 systemd units, nginx vhost, Codex bridge, nightly demo reset, runbook
+docs/                                   API contract, permissions matrix, dashboard screen design, acceptance evidence, QA run
 ```
 
 Dependencies (pinned): Next.js 16.4.5, React 19.3.1, Prisma 6.19.3, zod 4.6.7, iron-session 8.0.4, bcryptjs 3.0.3, Tailwind 3.4.19, TypeScript 5.9.3, Playwright 1.63.0. Selected UI components were adapted from an earlier project; see [docs/REUSE_MANIFEST.md](docs/REUSE_MANIFEST.md).

@@ -140,6 +140,7 @@ export function AssignmentPanel({ request, suggestion, onAssigned, onConflict, o
     <div className="space-y-3">
       {ai}
       <form
+        method="post"
         className="flex flex-wrap items-end gap-3"
         onSubmit={(e) => {
           e.preventDefault();

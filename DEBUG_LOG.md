@@ -1,8 +1,18 @@
 # Debug Log
 
-Three issues observed during development, written up in the required format. Raw notes are in `WORKLOG.md`.
+The three most significant bugs from development, in the required format, followed by four more found later and recorded the same way. Raw notes, written as things happened, are in `WORKLOG.md`; commit hashes point to the fixes.
 
-**Honest classification:** only Bug 1 is a significant application security defect found at runtime. Bug 2 is a real but lower-severity application defect (it only shows when client JavaScript fails to load). Bug 3 is a genuine styling defect inherited from the donor token format; it hid UI feedback but had no security or data impact. No bugs were introduced deliberately and none of these were described before they were observed. Static concerns about the donor repository (missing per-record checks in its ticket routes) are **not** included because they were never reproduced here.
+Why these three: Bug 1 was a security defect (a signed-out session stayed usable), Bug 2 leaked passwords into URLs and logs, and Bug 3 broke the harness that proves the AI feature degrades safely, while looking exactly like a real AI outage. All were observed at runtime and reproduced before they were fixed; none were introduced deliberately.
+
+| # | Layer | Bug | Fix |
+| --- | --- | --- | --- |
+| 1 | Authentication | Copied session cookie stayed valid after logout | `36be90d` |
+| 2 | Frontend / security | Login form put the password in the URL when JavaScript failed | `21871a0` |
+| 3 | AI integration / test infrastructure | Fake AI bridge never answered; tests hung 50 s per call | `3d6304d` |
+| 4 | Deployment / security headers | CSP blocked every script on the prerendered 404 page | `57b027e` |
+| 5 | Frontend build | Tailwind opacity classes silently missing from the CSS | `e654398` |
+| 6 | Dashboard data | Dashboard figures opened lists with different records | dashboard review, 2026-11-09 |
+| 7 | Frontend state | "Use as assignee" failed with a false "not eligible" error | dashboard review, 2026-11-09 |
 
 ---
 
@@ -67,11 +77,90 @@ The same run's console showed `Refused to execute script from '…/_next/static/
 
 **Verification:** a Playwright context with `javaScriptEnabled: false` submits the form → `method POST status 200 url http://localhost:3000/login` (no query string). With JS enabled, the e2e suite still passes (5/5).
 
-**Prevention:** proposed, not implemented: an e2e test with JS disabled asserting no credentials in the URL. Also use `pkill -f next-server` (not `next start`) in local scripts.
+**Prevention:** e2e regression test `tests/e2e/flows.spec.ts` → "sign-in form with JavaScript disabled posts, and credentials never reach the URL" (a JS-disabled browser context submits the form and asserts a POST navigation and no email or password in the URL). Local scripts stop servers with `pkill -f next-server`, not `next start`. Writing this prevention up turned up a second instance of the same class: the HR "Add employee" dialog (`employee-dialog.tsx`), which has an initial-password field, also had a `<form>` with no method, as did four other JS-handled forms (2026-11-10). All now say `method="post"`, and a unit test (`tests/unit/forms-post.test.ts`) fails if any `<form>` in `src/` omits its method or a form with a password field does not post; it fails against the previous code, listing those six forms.
 
 ---
 
-## Bug 3 — Tailwind opacity classes generated no CSS, so chart bars and hover states were invisible
+## Bug 3 — AI tests hung for 50 seconds per call: the fake AI bridge never answered
+
+**Affected commit/date:** the AI router work that became `3d6304d`, 2026-11-09 (found before that commit on the first test run of the new suite).
+
+**Symptom:** the first integration run with the new AI tests had 3 failures. The AI02 case ("provider returns invalid output → 503 `AI_INVALID_OUTPUT`") took about 100 seconds and returned `AI_UNAVAILABLE` instead. Stored request suggestions stayed `PENDING` (the test failed with "suggestion never finished"). In the product this is the same screen a user sees when the real AI is down, so the test could not tell "our fallback works" from "the harness is broken".
+
+**Investigation:**
+- First hypothesis: the fake bridge (`tests/integration/fake-bridge.ts`, a deterministic stand-in for the Codex bridge on a unix socket) returned the wrong shape, so the app rejected it. Ruled out: it had never logged a request, so it had not answered anything, right or wrong.
+- Second hypothesis: the app never reached it. The timing said otherwise: 100 s for two AI calls is exactly two of the app's 50 s bridge timeouts (`CODEX_BRIDGE_TIMEOUT_MS`, default 50 000). The app was connecting and waiting; nobody was reading the socket.
+- Who should have been reading it: the fake bridge runs **inside the test runner process** (`tests/integration/run.ts`), and the runner launched the test child with `spawnSync`. `spawnSync` blocks the runner's event loop until the child exits, so the bridge's connection handler, which runs on that event loop, never ran.
+
+**Root cause:** a synchronous child-process call in a process that also hosts a server. The two designs were each reasonable alone (synchronous runner from the first harness, in-process fake added for AI) and wrong together.
+
+**Fix:** (`3d6304d`, `tests/integration/run.ts`) test and Playwright children run with async `spawn`, so the runner's event loop keeps serving the fake bridge (diff abridged):
+
+```diff
+-    const t = spawnSync("npx", ["tsx", "--test", "--test-concurrency=1", ...files], { env, stdio: "inherit" });
+-    process.exitCode = t.status ?? 1;
++    process.exitCode = await runAsync("npx", ["tsx", "--test", "--test-concurrency=1", ...files], { BASE_URL: `http://localhost:${PORT}` }, true);
+
++/**
++ * Async child process. The runner hosts the fake AI bridge in-process, so the test
++ * child must NOT be started with spawnSync (that blocks the event loop and the
++ * bridge never answers).
++ */
++function runAsync(cmd: string, args: string[], extraEnv: Record<string, string> = {}, shell = false): Promise<number> {
++  return new Promise((resolve) => {
++    const child = spawn(cmd, args, { env: { ...env, ...extraEnv }, stdio: "inherit", shell });
++    child.on("close", (code) => resolve(code ?? 1));
++  });
++}
+```
+
+**Verification:** the next run passed: integration 26/26, e2e 5/5, including AI02 (`AI_INVALID_OUTPUT`) and the stored suggestions reaching `READY`.
+
+**Prevention:** the warning comment sits on `runAsync`, the only way the runner starts suites. The test environment sets `CODEX_BRIDGE_TIMEOUT_MS=2000` (`992ebd6`), so a bridge that stops answering fails a test in 2 s with a clear timeout instead of a 100 s hang, and a dedicated "[ai-slow]" case proves the timeout path.
+
+---
+
+## Further bugs, same format
+
+Found after the first three were written up: in the exploratory re-test (4), the UI redesign (5) and a calculation-by-calculation dashboard review (6, 7).
+
+### Bug 4 — The security headers blocked every script on the 404 page
+
+**Affected commit/date:** the security-header change in `57b027e`, 2026-11-10 (caught in the re-test before that commit; reproduced again for this write-up).
+
+**Symptom:** during the re-run of the exploratory tests after adding a nonce-based Content-Security-Policy (`src/proxy.ts`), the branded "Page not found" page showed CSP violations in the browser console: the browser refused its scripts, so nothing interactive on that page could work. Reproduced on 2026-11-10 by building with the fix removed and loading `/this-page-does-not-exist` in Chromium:
+
+```text
+status 404
+csp script-src: script-src 'self' 'nonce-…' 'strict-dynamic'
+scripts: [{"src":"2rv5jvl35qh22.js","nonce":null},{"src":"2wye36b3mbzpa.js","nonce":null}, …]
+console errors: 15
+  Loading the script 'http://localhost:3100/_next/static/chunks/44is5unny0ti1.js' violates the following
+  Content Security Policy directive: "script-src 'self' 'nonce-ZjMwMzc2…' 'strict-dynamic'" …
+```
+
+**Investigation:** (the original notes record the violations and the cause; the steps below are the same checks repeated on the reproduction)
+- Only the 404 page was affected: signed-in pages under the same policy ran their scripts normally, so the policy text itself was not the problem.
+- On working pages every `<script>` carries the nonce from the `x-nonce` request header; on the 404 page `nonce` was empty on all of them (output above).
+- The build summary explains why: `○ /_not-found` (static). Next.js applies the per-request nonce only when it renders the page for that request. The not-found page was prerendered at build time, when no nonce existed, while the proxy still sent a fresh nonce policy with every response. With `'strict-dynamic'`, a script without the nonce is refused even from `'self'`.
+
+**Root cause:** a per-request security header combined with a page rendered once at build time. Any page Next.js decides is static would have the same problem; the 404 page was simply the first one with no dynamic data.
+
+**Fix:** (`57b027e`, `src/app/layout.tsx`) the root layout reads the request headers, which makes every page render per request and receive the nonce:
+
+```ts
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Content-Security-Policy nonce from src/proxy.ts (static pages would carry none).
+  await headers();
+```
+
+The build summary then lists `ƒ /_not-found` (dynamic). Cost: no static HTML caching, which is irrelevant for an authenticated internal app.
+
+**Verification:** after rebuilding, the same check shows every script with a nonce and only one console error, the expected 404 for the page itself. The exploratory re-run then found no CSP violations on any page.
+
+**Prevention:** e2e regression test `tests/e2e/flows.spec.ts` → "CSP: scripts on the not-found page carry the per-request nonce and none are refused". When adding any header that changes per request, check the build summary for `○` routes, because those never see the request.
+
+### Bug 5 — Tailwind opacity classes generated no CSS, so chart bars and hover states were invisible
 
 **Affected commit/date:** `b4c8a08` (first adapted UI primitives) through `9709361`, found 2026-11-09 during the UI redesign.
 
@@ -84,23 +173,13 @@ The same run's console showed `Refused to execute script from '…/_next/static/
 
 **Root cause:** the colour-token format adapted from the donor (`tailwind.config.ts`, `src/app/globals.css`) was incompatible with Tailwind opacity modifiers. Since the first UI commit, button hover states, table-row hover, progress-bar tracks and destructive hovers had also been invisible.
 
-**Fix:** (UI redesign commit) tokens are HSL channels (`--primary: 244 52% 44%`) and the config maps `primary: "hsl(var(--primary) / <alpha-value>)"` for every colour.
+**Fix:** (`e654398`) tokens are HSL channels (`--primary: 244 52% 44%`) and the config maps `primary: "hsl(var(--primary) / <alpha-value>)"` for every colour.
 
 **Verification:** after rebuilding, the compiled CSS contains `.bg-primary\/85{background-color:hsl(var(--primary) / .85)}`. The dashboard screenshot shows filled bars, and the axe scan (15 pages, 0 violations, which includes colour contrast) still passes.
 
-**Prevention:** proposed, not implemented: a build-time check that greps the compiled CSS for a few known opacity classes.
+**Prevention:** e2e regression test `tests/e2e/flows.spec.ts` → "compiled CSS contains opacity-modified colour classes" reads the stylesheet rules the browser actually loaded and fails if `bg-primary/90` or `bg-danger/10` is missing, so a token format that cannot take an alpha value breaks the build's test run instead of silently hiding UI states.
 
----
-
-_Earlier draft of this log listed a test-suite isolation defect (integration D03 mutating a shared fixture) as Bug 3. It was a genuine but minor test-only issue and is kept in `WORKLOG.md`._
-
----
-
-## Further significant bugs found in the dashboard review (2026-11-09)
-
-The three entries above remain the required write-ups. These two were found later, during a calculation-by-calculation review of the dashboard, and are recorded in the same format.
-
-### Bug 4 — Dashboard metric cards opened lists that did not contain the records behind their numbers
+### Bug 6 — Dashboard metric cards opened lists that did not contain the records behind their numbers
 
 **Affected commit/date:** "Open requests" link since `07ae6e8`; "Resolved this week" link since `bc3089f`; found 2026-11-09.
 
@@ -119,7 +198,7 @@ The three entries above remain the required write-ups. These two were found late
 
 **Prevention:** every dashboard number that links somewhere has a list filter with the same definition, and the e2e test compares them.
 
-### Bug 5 — "Use as assignee" on the AI suggestion could fail with a false "not eligible" error
+### Bug 7 — "Use as assignee" on the AI suggestion could fail with a false "not eligible" error
 
 **Affected commit/date:** since the assigner suggestion panel (`3d6304d`), found 2026-11-09 when an e2e run failed.
 
@@ -133,3 +212,4 @@ The three entries above remain the required write-ups. These two were found late
 
 **Verification:** e2e suite run twice in a row after the fix: 12/12 both times.
 
+**Prevention:** UI handlers distinguish "not loaded yet" from "not allowed" (pending state kept and applied on load); the e2e flow clicks the suggestion as early as possible.

@@ -72,7 +72,7 @@ export function AssignWizard({ templates, employees, initialEmployeeId }: { temp
 
   return (
     <div className="space-y-6">
-      <form onSubmit={review} className="grid gap-4 rounded-lg border bg-card p-5 md:grid-cols-[1fr_1fr_auto] md:items-end">
+      <form onSubmit={review} method="post" className="grid gap-4 rounded-lg border bg-card p-5 md:grid-cols-[1fr_1fr_auto] md:items-end">
         <div className="space-y-1.5">
           <Label htmlFor="emp">New hire (no checklist yet)</Label>
           <select id="emp" required value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); setOptions(null); }} className="h-9 w-full rounded-md border bg-card px-2 text-sm">

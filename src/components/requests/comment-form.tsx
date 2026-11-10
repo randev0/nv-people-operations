@@ -31,7 +31,7 @@ export function CommentForm({ requestId }: { requestId: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-2">
+    <form onSubmit={submit} method="post" className="space-y-2">
       <Label htmlFor="comment" className="text-sm font-semibold">Add a comment</Label>
       <Textarea id="comment" rows={3} maxLength={3000} value={body} onChange={(e) => setBody(e.target.value)} />
       <CharCount value={body} max={3000} />

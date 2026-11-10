@@ -99,7 +99,7 @@ export function TemplateEditor({ departments, template }: { departments: Dept[];
   const fe = (k: string) => fieldErrors[k]?.join(" ");
 
   return (
-    <form onSubmit={save} className="space-y-5" noValidate>
+    <form onSubmit={save} method="post" className="space-y-5" noValidate>
       {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
       <section className="grid gap-4 rounded-lg border bg-card p-5 md:grid-cols-2">
         <div className="space-y-1.5">

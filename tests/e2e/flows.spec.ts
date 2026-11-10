@@ -176,3 +176,44 @@ test("error handling: branded 404, session expiry banner returns you to the page
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Open menu" })).toBeFocused();
 });
+
+// DEBUG_LOG Bug 2 regression: if client JavaScript fails to load, the native form submit must
+// never put the credentials in the URL (browser history, proxy and access logs).
+test("sign-in form with JavaScript disabled posts, and credentials never reach the URL", async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  await page.goto("/login");
+  await page.locator("#email").fill("employee.my@example.com");
+  await page.locator("#password").fill("not-the-real-password");
+  const [req] = await Promise.all([page.waitForRequest((r) => r.isNavigationRequest() && r.url().includes("/login")), page.locator("form button[type=submit]").click()]);
+  expect(req.method()).toBe("POST");
+  await page.waitForLoadState();
+  expect(page.url()).not.toContain("password");
+  expect(page.url()).not.toContain("employee.my");
+  await context.close();
+});
+
+// DEBUG_LOG Bug 4 regression: pages that are not found must still carry the CSP nonce on
+// their scripts (a prerendered page has none, and the browser refuses every script).
+test("CSP: scripts on the not-found page carry the per-request nonce and none are refused", async ({ page }) => {
+  const violations: string[] = [];
+  page.on("console", (m) => { if (m.text().includes("Content Security Policy")) violations.push(m.text()); });
+  const res = await page.goto("/this-page-does-not-exist");
+  expect(res?.status()).toBe(404);
+  const nonces = await page.$$eval("script[src]", (s) => s.map((x) => (x as HTMLScriptElement).nonce));
+  expect(nonces.length).toBeGreaterThan(0);
+  expect(nonces.every(Boolean)).toBe(true);
+  expect(violations).toEqual([]);
+});
+
+// DEBUG_LOG Bug 5 regression: Tailwind silently drops opacity-modified colour classes when the
+// colour tokens cannot take an alpha value. Check the compiled CSS really contains them.
+test("compiled CSS contains opacity-modified colour classes (bg-primary/90, bg-danger/10)", async ({ page }) => {
+  await page.goto("/login");
+  const selectors = await page.evaluate(() =>
+    [...document.styleSheets].flatMap((s) => { try { return [...s.cssRules].map((r) => (r as CSSStyleRule).selectorText ?? ""); } catch { return []; } }),
+  );
+  for (const cls of ["bg-primary\\/90", "bg-danger\\/10"]) {
+    expect(selectors.some((s) => s.includes(cls)), `${cls} missing from compiled CSS`).toBe(true);
+  }
+});

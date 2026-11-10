@@ -29,6 +29,6 @@ Never copied: API routes, Prisma schema/migrations, deployment/setup scripts, AI
 
 Reviewed against the repository on 2026-11-09: every row above exists in `src/` as described. Donor files considered but not used: `card`, `tabs`, `select`, `dropdown-menu`, `popover`, `scroll-area`, `separator`, `switch` (native `<select>`/links used instead).
 
-**Colour tokens (2026-11-09):** the donor token format (full colours in `var(--x)`) was replaced with HSL channels and `hsl(var(--x) / <alpha-value>)` mapping, because the donor format silently disabled Tailwind opacity classes (DEBUG_LOG Bug 3). New project components written from scratch: `common/surface.tsx`, `requests/activity-timeline.tsx`, `requests/inline-transition.tsx`.
+**Colour tokens (2026-11-09):** the donor token format (full colours in `var(--x)`) was replaced with HSL channels and `hsl(var(--x) / <alpha-value>)` mapping, because the donor format silently disabled Tailwind opacity classes (DEBUG_LOG Bug 5). New project components written from scratch: `common/surface.tsx`, `requests/activity-timeline.tsx`, `requests/inline-transition.tsx`.
 
 **Brand redesign (2026-11-09):** visual language follows the public Next Ventures website (colours, typefaces, dot-grid and dotted-map motifs), studied through computed styles. No logo, image, copy or code was taken from it. Fonts and map data are third-party open-source (see THIRD_PARTY_NOTICES.md). New project files: `dashboard/brand-viz.tsx`, `dashboard/greeting.tsx`, `dashboard/world-dots.ts` (generated).

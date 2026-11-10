@@ -78,7 +78,7 @@ export function EmployeeDialog({ departments, managers, employee }: { department
             <Button asChild><a href={`/onboarding/assign?employeeId=${created.id}`}>Assign onboarding checklist</a></Button>
           </div>
         ) : (
-          <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2" noValidate>
+          <form onSubmit={submit} method="post" className="grid gap-3 sm:grid-cols-2" noValidate>
             {error ? <Alert variant="destructive" className="sm:col-span-2"><AlertDescription>{error}</AlertDescription></Alert> : null}
             <div className="space-y-1 sm:col-span-2"><Label htmlFor="e-name">Full name</Label><Input id="e-name" name="name" defaultValue={employee?.name} required maxLength={120} />{fe("name")}</div>
             {!employee ? (

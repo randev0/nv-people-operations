@@ -16,7 +16,8 @@ An HRIS module built for the Next Ventures **HRIS Systems Developer** technical 
 | Each requirement and the evidence that it works | [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
 | Who can see and do what | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) |
 | Endpoints and payloads | [docs/API_CONTRACT.md](docs/API_CONTRACT.md) |
-| The three most significant bugs, debugged step by step | [DEBUG_LOG.md](DEBUG_LOG.md) |
+| The three most significant bugs, debugged step by step (plus four more, same format) | [DEBUG_LOG.md](DEBUG_LOG.md) |
+| Dashboard screen design and work-queue ordering | [docs/DASHBOARD.md](docs/DASHBOARD.md) |
 | A "try to break it" test run, its findings and how each was fixed | [docs/QA_FINDINGS.md](docs/QA_FINDINGS.md) |
 | Day-by-day engineering notes and decisions | [WORKLOG.md](WORKLOG.md) |
 | Hosting, security headers and the AI bridge | [deploy/DEPLOY.md](deploy/DEPLOY.md) |
@@ -93,7 +94,7 @@ The seed is idempotent. It only creates missing fixture rows (deterministic IDs 
 | `npm run test:e2e` | Same harness with Playwright: request lifecycle with AI routing, task unblocking, template editor, role navigation, dashboard tabs and figures against their lists, assignment (single, stale, bulk), error pages and session expiry, keyboard-only use, axe accessibility scan, 390 px layout |
 | `npm run db:generate` / `db:migrate` / `db:seed` / `db:verify-seed` | Prisma client, `migrate deploy`, seed, seed assertions |
 
-Latest results (2026-11-10): lint 0 problems, typecheck 0 errors, unit 36/36, integration 34/34, e2e 22/22 (including keyboard-only use and an axe WCAG 2.1 AA scan of 27 pages), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
+Latest results (2026-11-10): lint 0 problems, typecheck 0 errors, unit 38/38, integration 34/34, e2e 25/25 (including keyboard-only use and an axe WCAG 2.1 AA scan of 27 pages), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 
 ## Deployment
 

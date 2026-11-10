@@ -50,7 +50,7 @@ Evidence re-run on commit `cfe2666` (final local run after a clean `npm ci`). St
 | 2026-11-09 | `npm run lint` | 0 problems |
 | 2026-11-09 | `npm run build` | compiled; 50 route entries (pages + API) |
 | 2026-11-09 | `npm run test:unit` | 24 pass, 0 fail |
-| 2026-11-09 | `npm run test:integration` | 24 pass, 0 fail (after review fixes; earlier 23/23 ×4; first-ever run 22/23, see DEBUG_LOG Bug 3) |
+| 2026-11-09 | `npm run test:integration` | 24 pass, 0 fail (after review fixes; earlier 23/23 ×4; first-ever run 22/23, a test-isolation defect, see WORKLOG 2026-11-09) |
 | 2026-11-09 | `npm run test:e2e` | 5 passed |
 | 2026-11-09 | `npm run db:seed` ×3 + `npm run db:verify-seed` | identical totals; 22/22 checks |
 | 2026-11-09 | VPS: `prisma migrate deploy`, seed once, `verify-seed` | migration applied; 22/22 |
@@ -73,3 +73,4 @@ Evidence re-run on commit `cfe2666` (final local run after a clean `npm ci`). St
 | 2026-11-10 | Seed realism (authored request plan), every-role dashboard, sign-in redesign: verify-seed, unit, integration, e2e x2 | verify-seed 22/22 (fresh and re-run), unit 36/36, integration 27/27, e2e 21/21 twice; axe 27 pages, 0 violations |
 | 2026-11-10 | Exploratory-test fixes (docs/QA_FINDINGS.md): lint, typecheck, unit, integration, e2e x2, live checks | lint 0, typecheck 0, unit 36/36, integration 33/33 (new qa-fixes suite), e2e 22/22 twice; live: health ok, CSP and HSTS headers, branded 404, JSON API 404, signed-out deep link → `/login?next=…` |
 | 2026-11-10 | Public-demo hardening: lint, typecheck, unit, integration, e2e, live reset | lint 0, typecheck 0, unit 36/36, integration 34/34 (login slowdown, global AI cap), e2e 22/22; live: health ok, sign-in and AI suggestion work under the sandboxed unit, manual `peopleops-reset` run: backup written, verify-seed 22/22, AI suggestions regenerated 16 ok / 0 failed; timer next 19:17 UTC; releases pruned to 3 (disk 98% → 85%) |
+| 2026-11-10 | Debug-log preventions as tests, form methods: lint, typecheck, unit, integration, e2e | lint 0, typecheck 0, unit 38/38 (new: every `<form>` declares its method; fails on the previous code), integration 34/34, e2e 25/25 (new: JS-disabled sign-in posts without credentials in the URL; 404 page scripts carry the CSP nonce; compiled CSS has opacity classes) |
