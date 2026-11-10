@@ -71,6 +71,8 @@ Security headers: the app sets a per-request nonce Content-Security-Policy and, 
 
 Service sandboxing (2026-11-10): besides the unprivileged user, `peopleops.service` runs with `ProtectSystem=strict` (writable only `/opt/peopleops/releases` and the AI socket directory), `ProtectHome`, `PrivateDevices`, kernel/cgroup protections, no capabilities and only inet/unix sockets; see `deploy/peopleops.service`.
 
+SSH is key-only for every user (`/etc/ssh/sshd_config.d/10-key-only.conf`, 2026-11-10). If the key is lost, use the hosting provider's web console to add a new one.
+
 Release retention: only the current release and the two before it are kept in `/opt/peopleops/releases` (older ones removed after each deploy: `ls -1t | tail -n +4`), since the disk is shared.
 
 Logs: `journalctl -u peopleops -f` (browser-side errors appear as `"event":"client.error"` lines). Rollback: point `/opt/peopleops/current` at the previous release and restart.
