@@ -38,7 +38,7 @@ All data is synthetic (`example.com`). The shared demo password is **`PeopleOps-
 | `hr.admin@example.com` | HR Admin | Dashboard, all requests, employees, templates, assigning checklists |
 | `manager.my@example.com` | Manager (Malaysia, Engineering) | Team requests: assign, close. Direct reports' onboarding |
 | `employee.my@example.com` | Employee (recent hire) | Own requests, AI suggestion, own onboarding checklist |
-| `it.owner@example.com` | Employee in IT | Assigned requests and onboarding tasks across several hires (My Work) |
+| `it.owner@example.com` | Employee in IT | Assigned requests and onboarding tasks for two new hires (My Work) |
 | `employee.cy@example.com` | Employee (Cyprus) | Unrelated user for negative access checks |
 
 A second HR admin, `hr.ops@example.com`, also exists.
@@ -46,7 +46,7 @@ A second HR admin, `hr.ops@example.com`, also exists.
 ## Five-minute walkthrough
 
 1. **employee.my**: Requests → New request. Describe a laptop problem and click **Suggest routing** to see the AI's category, priority and team (if the AI is unavailable you're told so and the draft is kept). Submit. Then open **My Onboarding**: blocked tasks show what they're waiting on, and overdue tasks are flagged.
-2. **manager.my**: Dashboard → **Assign requests** tab, or Requests → *My team*. Open the new request: the AI suggestion recommends an IT person and only the IT team is offered (for example Priya Ismail, it.owner). Try a request ID from another team: you get "Not found".
+2. **manager.my**: Dashboard → **Assign requests** tab, or Requests → *My team*. Open the new request: the AI suggestion recommends an IT person and only the IT team is offered. Assign it to **Priya Ismail** (that is `it.owner`, so you can continue as her in step 3), whoever the AI suggested. Try a request ID from another team: you get "Not found".
 3. **it.owner**: My Work → complete **Create company account**. *Hand over laptop* becomes startable straight away. Assigned requests → start, comment, resolve.
 4. **employee.my**: close the resolved request.
 5. **hr.admin**: Dashboard → Today (Assign requests tab, most urgent first; try Assign, or Select two requests of one category and assign them together) → Onboarding follow-ups tab (overdue tasks owned by others) → Up next → **Insights** (every figure opens the list behind its number) → Templates → New template (try a prerequisite loop to see the warning) → Onboarding → Assign checklist (deadlines are calculated per task, and each task needs an owner) → Employees (create, edit; disabling someone with open work asks who takes it over).
@@ -94,7 +94,7 @@ The seed is idempotent. It only creates missing fixture rows (deterministic IDs 
 | `npm run test:e2e` | Same harness with Playwright: request lifecycle with AI routing, task unblocking, template editor, role navigation, dashboard tabs and figures against their lists, assignment (single, stale, bulk), error pages and session expiry, keyboard-only use, axe accessibility scan, 390 px layout |
 | `npm run db:generate` / `db:migrate` / `db:seed` / `db:verify-seed` | Prisma client, `migrate deploy`, seed, seed assertions |
 
-Latest results (2026-11-10): lint 0 problems, typecheck 0 errors, unit 38/38, integration 34/34, e2e 25/25 (including keyboard-only use and an axe WCAG 2.1 AA scan of 27 pages), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
+Latest results (2026-11-10): lint 0 problems, typecheck 0 errors, unit 42/42, integration 34/34, e2e 25/25 (including keyboard-only use and an axe WCAG 2.1 AA scan of 27 pages), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 
 ## Deployment
 

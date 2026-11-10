@@ -4,6 +4,7 @@ import { AppError, forbidden, rateLimited } from "../errors";
 import { env } from "../env";
 import { aiBudgetExceeded } from "../auth/throttle";
 import { canAssignRequest, type Actor } from "../auth/permissions";
+import { explanationWithoutPerson } from "./redact";
 import { suggestRouting } from "./router";
 import { loadReadableRequest } from "../requests/service";
 
@@ -117,7 +118,7 @@ export async function getRequestSuggestion(actor: Actor, requestId: string): Pro
     priority: s.priority,
     suggestedDepartment: s.suggestedDepartment,
     suggestedAssignee: person ? { ...person, inCurrentTeam: personDept === currentTeam } : null,
-    explanation: s.explanation,
+    explanation: person ? s.explanation : explanationWithoutPerson(s.explanation, s.suggestedAssignee?.name),
     failureReason: s.failureReason ? FAILURE_TEXT[s.failureReason] ?? "The AI suggestion failed." : null,
     updatedAt: s.updatedAt.toISOString(),
     canRegenerate: canAssign,
