@@ -30,5 +30,9 @@ export const env = {
   openaiModel: () => process.env.OPENAI_MODEL || null,
   loginLimit: () => Number(process.env.LOGIN_RATE_LIMIT ?? 10),
   loginWindowMinutes: () => Number(process.env.LOGIN_RATE_WINDOW_MINUTES ?? 15),
+  /** Delay per attempt beyond the account-wide threshold (capped at 5×). */
+  loginSlowdownMs: () => Number(process.env.LOGIN_SLOWDOWN_MS ?? 1000),
   aiLimitPerMinute: () => Number(process.env.AI_RATE_LIMIT_PER_MINUTE ?? 10),
+  /** Ceiling on AI calls across all users per rolling hour (protects the provider quota). */
+  aiGlobalLimitPerHour: () => Number(process.env.AI_GLOBAL_LIMIT_PER_HOUR ?? 200),
 };

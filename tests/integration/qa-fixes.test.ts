@@ -102,3 +102,17 @@ test("E2/M10: unknown API paths answer JSON 404; the lock-out message says how l
   await db.loginThrottle.deleteMany({});
   assert.ok(BASE);
 });
+
+test("AI global cap: once the hourly ceiling across all users is spent, a fresh user is refused too", async () => {
+  const other = await db.user.findFirstOrThrow({ where: { role: "EMPLOYEE", loginEnabled: true, countryCode: "BD" } });
+  await db.aiUsageBucket.deleteMany({}); // earlier tests (H2) also fill buckets
+  // Simulate heavy use by one shared account in the last hour (limit 500/h in tests).
+  await db.$executeRaw`INSERT INTO "AiUsageBucket" ("userId", "windowStart", "count") VALUES (${other.id}::uuid, date_trunc('minute', now()) - interval '10 minutes', 600)
+    ON CONFLICT ("userId", "windowStart") DO UPDATE SET "count" = 600`;
+  const mgr = await login("manager.my@example.com");
+  const r = await mgr.post("/ai/route-request", { title: "Laptop broken", description: "My laptop does not boot after the update." });
+  assert.equal(r.status, 429);
+  await db.aiUsageBucket.deleteMany({ where: { userId: other.id } });
+  const again = await mgr.post("/ai/route-request", { title: "Laptop broken", description: "My laptop does not boot after the update." });
+  assert.equal(again.status, 200, "budget returns when the ceiling has room");
+});

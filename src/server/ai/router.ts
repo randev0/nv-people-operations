@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "../db";
 import { aiInvalidOutput, aiUnavailable, rateLimited } from "../errors";
-import { hitAiBucket } from "../auth/throttle";
+import { aiBudgetExceeded } from "../auth/throttle";
 import { env } from "../env";
 import type { Actor } from "../auth/permissions";
 import { anthropicProvider, type RoutingProvider } from "./provider";
@@ -111,8 +111,7 @@ export async function routeRequest(
   requestId: string,
   provider: RoutingProvider = selectProvider(),
 ): Promise<RouterDTO> {
-  const count = await hitAiBucket(actor.id);
-  if (count > env.aiLimitPerMinute()) throw rateLimited();
+  if (await aiBudgetExceeded(actor.id, env.aiLimitPerMinute(), env.aiGlobalLimitPerHour())) throw rateLimited();
   const r = await suggestRouting({ requesterId: actor.id, countryCode: actor.countryCode }, input, requestId, provider);
   if (r.ok) return r.suggestion;
   if (r.reason === "INVALID_OUTPUT" || r.reason === "NO_STRUCTURED_OUTPUT") throw aiInvalidOutput();

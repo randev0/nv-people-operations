@@ -30,14 +30,23 @@ export async function clearLoginThrottle(email: string, ip: string) {
   await db.loginThrottle.deleteMany({ where: { keyHash: { in: [throttleKey(email, ip), throttleKey(email, "*")] } } });
 }
 
-/** Per-user per-minute AI bucket; returns count after increment. */
-export async function hitAiBucket(userId: string): Promise<number> {
+/**
+ * Counts one AI call for this user and reports whether it is over budget: more than the
+ * per-user per-minute limit, or more than the global hourly ceiling across all users
+ * (the demo accounts are public, so one shared account must not drain the provider).
+ */
+export async function aiBudgetExceeded(userId: string, perMinute: number, globalPerHour: number): Promise<boolean> {
   const rows = await db.$queryRaw<{ count: number }[]>`
     INSERT INTO "AiUsageBucket" ("userId", "windowStart", "count")
     VALUES (${userId}::uuid, date_trunc('minute', now()), 1)
     ON CONFLICT ("userId", "windowStart") DO UPDATE SET "count" = "AiUsageBucket"."count" + 1
     RETURNING "count"`;
-  return rows[0].count;
+  if (rows[0].count > perMinute) return true;
+  const total = await db.$queryRaw<{ total: bigint | null }[]>`
+    SELECT sum("count") AS total FROM "AiUsageBucket" WHERE "windowStart" > now() - interval '1 hour'`;
+  // Bounded cleanup of buckets nobody reads any more.
+  await db.$executeRaw`DELETE FROM "AiUsageBucket" WHERE ("userId", "windowStart") IN (SELECT "userId", "windowStart" FROM "AiUsageBucket" WHERE "windowStart" < now() - interval '1 day' LIMIT 100)`;
+  return Number(total[0].total ?? 0) > globalPerHour;
 }
 
 /**

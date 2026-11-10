@@ -1,0 +1,11 @@
+# /etc/systemd/system/peopleops-reset.service — nightly demo reset (see reset-demo.sh)
+[Unit]
+Description=People Operations demo data reset
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/peopleops/peopleops.env
+ExecStart=/opt/peopleops/bin/reset-demo.sh
+SyslogIdentifier=peopleops-reset

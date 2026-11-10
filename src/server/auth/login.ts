@@ -15,17 +15,23 @@ export const loginSchema = z
   })
   .strict();
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 const invalid = () => new AppError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
 
 export async function login(input: z.infer<typeof loginSchema>, ip: string): Promise<EmployeeDTO> {
-  // Two counters: per email+IP, and per email regardless of IP (3× limit) so rotating
-  // source addresses or spoofed forwarding headers cannot remove the cap.
+  // Two counters. Per email+IP: a hard limit (429). Per email across all IPs: a slowdown,
+  // not a lock-out. A hard account-wide lock would let anyone on the internet lock a demo
+  // account (the passwords are public in the README) for every reviewer; a delay still
+  // throttles IP-rotating guessing without denying the real user.
   const perIp = await hitLoginThrottle(input.email, ip, env.loginWindowMinutes());
   const perAccount = await hitLoginThrottle(input.email, "*", env.loginWindowMinutes());
-  if (perIp > env.loginLimit() || perAccount > env.loginLimit() * 3) {
+  if (perIp > env.loginLimit()) {
     const mins = env.loginWindowMinutes();
     throw new AppError(429, "RATE_LIMITED", `Too many sign-in attempts. Try again in ${mins} minute${mins === 1 ? "" : "s"}, or ask your HR admin.`);
   }
+  const excess = perAccount - env.loginLimit() * 3;
+  if (excess > 0) await sleep(Math.min(excess, 5) * env.loginSlowdownMs());
 
   const user = await db.user.findUnique({
     where: { email: input.email },

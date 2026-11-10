@@ -95,15 +95,20 @@ test("login throttle returns 429 after the configured attempts", async () => {
   assert.deepEqual(statuses.slice(10), [429, 429]);
 });
 
-test("rotating X-Forwarded-For does not bypass the per-account login cap", async () => {
-  const email = "spoof-probe@example.com";
+test("rotating X-Forwarded-For past the account-wide threshold slows sign-in down but never locks the real user out", async () => {
+  const { email } = await db.user.findFirstOrThrow({ where: { role: "EMPLOYEE", loginEnabled: true, countryCode: "LK", email: { not: { contains: "employee." } } } });
   const statuses: number[] = [];
-  for (let i = 0; i < 32; i++) {
-    const r = await new Client().req("POST", "/auth/login", { email, password: "x" }, { "x-forwarded-for": `198.51.100.${i}` });
+  for (let i = 0; i < 31; i++) {
+    const r = await new Client().req("POST", "/auth/login", { email, password: "wrong-guess" }, { "x-forwarded-for": `198.51.100.${i}` });
     statuses.push(r.status);
   }
-  assert.deepEqual(statuses.slice(0, 30), Array(30).fill(401)); // per-account cap = 3 × per-IP limit
-  assert.deepEqual(statuses.slice(30), [429, 429]);
+  assert.deepEqual(statuses, Array(31).fill(401)); // no account-wide 429
+  // Beyond 3 × per-IP limit each attempt is delayed (LOGIN_SLOWDOWN_MS=300 in tests)…
+  const t0 = Date.now();
+  const r = await new Client().req("POST", "/auth/login", { email, password: PASSWORD }, { "x-forwarded-for": "203.0.113.9" });
+  assert.ok(Date.now() - t0 >= 250, "slowed");
+  // …and the real owner on a fresh address still gets in.
+  assert.equal(r.status, 200);
 });
 
 test("health endpoint exposes no configuration", async () => {

@@ -30,7 +30,7 @@ The AI router is live (GPT-6.1 Sol through an isolated Codex bridge, see [deploy
 
 ## Demo accounts
 
-All data is synthetic (`example.com`). The shared demo password is **`PeopleOps-Demo-2026!`**. It is disposable, set through `DEMO_PASSWORD`, and used only for this assessment.
+All data is synthetic (`example.com`). The shared demo password is **`PeopleOps-Demo-2026!`**. It is disposable, set through `DEMO_PASSWORD`, and used only for this assessment. Because the password is public, the live demo data is **reset every night at 03:17 Malaysia time (19:17 UTC)**: anything a visitor changes, including passwords and disabled accounts, is restored for the next reviewer.
 
 | Email | Role | What to try |
 | --- | --- | --- |
@@ -77,7 +77,8 @@ Environment variables (`.env.example` has placeholders only):
 | `DEMO_PASSWORD` | Password given to every seeded account |
 | `ALLOW_ASSESSMENT_SEED` | Must be `true` for the seed to run. Turn it off again after seeding. |
 | `SEED_REFERENCE_DATE` | Optional `YYYY-MM-DD` for reproducible data (defaults to today) |
-| `LOGIN_RATE_LIMIT`, `LOGIN_RATE_WINDOW_MINUTES`, `AI_RATE_LIMIT_PER_MINUTE` | Optional overrides (defaults 10 per 15 min, 10/min) |
+| `LOGIN_RATE_LIMIT`, `LOGIN_RATE_WINDOW_MINUTES`, `LOGIN_SLOWDOWN_MS` | Optional login throttle overrides: per address 10 attempts per 15 min, then 429; per account (any address) after 30 failures each attempt is delayed by 1 s, up to 5 s, rather than locked |
+| `AI_RATE_LIMIT_PER_MINUTE`, `AI_GLOBAL_LIMIT_PER_HOUR` | Optional AI budget overrides (defaults 10 per user per minute, 200 per hour across all users) |
 
 The seed is idempotent. It only creates missing fixture rows (deterministic IDs and unique emails), never deletes anything, and doesn't overwrite changes reviewers make. Overdue counts change over time because they are measured against "today" in each hire's timezone.
 
@@ -92,7 +93,7 @@ The seed is idempotent. It only creates missing fixture rows (deterministic IDs 
 | `npm run test:e2e` | Same harness with Playwright: request lifecycle with AI routing, task unblocking, template editor, role navigation, dashboard tabs and figures against their lists, assignment (single, stale, bulk), error pages and session expiry, keyboard-only use, axe accessibility scan, 390 px layout |
 | `npm run db:generate` / `db:migrate` / `db:seed` / `db:verify-seed` | Prisma client, `migrate deploy`, seed, seed assertions |
 
-Latest results (2026-11-10): lint 0 problems, typecheck 0 errors, unit 36/36, integration 33/33, e2e 22/22 (including keyboard-only use and an axe WCAG 2.1 AA scan of 27 pages), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
+Latest results (2026-11-10): lint 0 problems, typecheck 0 errors, unit 36/36, integration 34/34, e2e 22/22 (including keyboard-only use and an axe WCAG 2.1 AA scan of 27 pages), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 
 ## Deployment
 

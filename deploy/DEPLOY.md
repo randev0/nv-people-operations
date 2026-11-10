@@ -35,7 +35,17 @@ ln -sfn /opt/peopleops/releases/$REL /opt/peopleops/current && chown -R peopleop
 systemctl restart peopleops && curl -s http://127.0.0.1:3310/api/health
 ```
 
-Seeding was run **once** on 2026-11-09 (`ALLOW_ASSESSMENT_SEED=true npx tsx prisma/seed.ts`, then `verify-seed.ts` → 22/22). The flag is not in the env file, so the app never seeds on boot.
+Seeding was first run on 2026-11-09 (`ALLOW_ASSESSMENT_SEED=true npx tsx prisma/seed.ts`, then `verify-seed.ts` → 22/22). The flag is not in the env file, so the app never seeds on boot.
+
+### Nightly demo reset
+
+The demo passwords are public (README), so the data is rebuilt every night by `peopleops-reset.timer` (19:17 UTC, 03:17 in Kuala Lumpur) running `/opt/peopleops/bin/reset-demo.sh` (source: `deploy/reset-demo.sh`, units `deploy/peopleops-reset.{service,timer}`). The script:
+
+1. takes a `pg_dump` to `/root/backups/peopleops/before-reset-<UTC time>.dump` (0700 folder, last 7 kept);
+2. stops the app (always restarted on exit);
+3. drops and recreates the `public` schema of the `peopleops` database only, runs `prisma migrate deploy`, the seed (`ALLOW_ASSESSMENT_SEED=true` set for that one command) and `verify-seed.ts`.
+
+Run it by hand with `systemctl start peopleops-reset`; logs in `journalctl -u peopleops-reset`. Dates in the seed are relative to the day it runs, so overdue and due-soon items stay realistic. Restore a backup with `docker exec -i peopleops-postgres pg_restore -U peopleops -d peopleops --clean < <dump>`.
 
 ## AI provider on the VPS: Codex bridge
 
@@ -57,5 +67,9 @@ Alternative: the env file also supports `AI_PROVIDER=openai` and `OPENAI_MODEL=g
 When `package-lock.json` is unchanged since the running release, a slim bundle (standalone output without `node_modules`, about 1.4 MB instead of 56 MB) can be shipped and the previous release's `app/node_modules` copied in on the VPS (`cp -a <prev>/app/node_modules <new>/app/`). Used for 236efde after the full bundle timed out in transfer.
 
 Security headers: the app sets a per-request nonce Content-Security-Policy and, when `APP_URL` is https, `Strict-Transport-Security` (src/proxy.ts); nginx has `server_tokens off` in both peopleops server blocks (2026-11-10; backups of the vhost in `/root/backups/nginx-peopleops-*.conf`).
+
+Service sandboxing (2026-11-10): besides the unprivileged user, `peopleops.service` runs with `ProtectSystem=strict` (writable only `/opt/peopleops/releases` and the AI socket directory), `ProtectHome`, `PrivateDevices`, kernel/cgroup protections, no capabilities and only inet/unix sockets; see `deploy/peopleops.service`.
+
+Release retention: only the current release and the two before it are kept in `/opt/peopleops/releases` (older ones removed after each deploy: `ls -1t | tail -n +4`), since the disk is shared.
 
 Logs: `journalctl -u peopleops -f` (browser-side errors appear as `"event":"client.error"` lines). Rollback: point `/opt/peopleops/current` at the previous release and restart.

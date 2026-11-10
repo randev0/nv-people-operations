@@ -685,7 +685,7 @@ Each decision is written as a short Architecture Decision Record: **context → 
 
 | Concern | Approach |
 | --- | --- |
-| **Security** | Server-side authorization (§4); CSRF defence via the Origin check; HttpOnly + Secure + SameSite cookies; bcrypt; login throttling; strict input schemas; escaped rendering; `X-Frame-Options: DENY`, `nosniff`; no secrets in the repo; the AI process can't read app secrets |
+| **Security** | Server-side authorization (§4); CSRF defence via the Origin check; HttpOnly + Secure + SameSite cookies; bcrypt; login throttling (hard limit per address, slowdown rather than lock-out per account, so a public demo account cannot be locked for everyone); per-user and global AI budgets; strict input schemas; escaped rendering; `X-Frame-Options: DENY`, `nosniff`; no secrets in the repo; the AI process can't read app secrets |
 | **Privacy** | APIs return minimal DTOs (no password hashes, no session data; email only where the matrix allows). The AI sees only opaque IDs, names, departments and countries — no emails or HR fields. AI logs record only request ID, latency and outcome |
 | **Data integrity** | Foreign keys and `CHECK` constraints; append-only event tables; no hard deletes; multi-row writes are atomic |
 | **Time** | UTC timestamps for events; calendar dates plus an IANA timezone for deadlines; the dashboard uses one `asOf` time for the whole page |
@@ -748,5 +748,6 @@ Dependencies (pinned): Next.js 16.4.5, React 19.3.1, Prisma 6.19.3, zod 4.6.7, i
 | 2026-11-10 | Dashboard split into Today (work) and Insights (reporting) for every role, after review feedback asking for less information at once; every figure still opens its filtered records. |
 | 2026-11-10 | Only the category's own team can be assigned a request; assigners can move a misfiled request to another category before work starts (recorded in its activity). |
 | 2026-11-10 | Disabling a login with open work requires handing it to a colleague in the same team, in one transaction. |
+| 2026-11-10 | Hardening for a public demo: the account-wide login cap became a slowdown (a lock-out would let anyone deny a demo account to reviewers); a global hourly AI ceiling; nightly demo-data reset with a backup first; systemd sandboxing for the app service. |
 | 2026-11-10 | Error handling completed after an exploratory test run (docs/QA_FINDINGS.md): branded error and 404 pages, plain-language validation, session-expiry banner with return path, nonce-based CSP. |
 

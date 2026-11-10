@@ -38,6 +38,8 @@ const env: NodeJS.ProcessEnv = {
   CODEX_BRIDGE_SOCKET: join(mkdtempSync(join(tmpdir(), "po-fake-bridge-")), "bridge.sock"),
   LOGIN_RATE_LIMIT: "10",
   AI_RATE_LIMIT_PER_MINUTE: "3",
+  AI_GLOBAL_LIMIT_PER_HOUR: "500",
+  LOGIN_SLOWDOWN_MS: "300",
 };
 (env as Record<string, string>).NODE_ENV = "production";
 

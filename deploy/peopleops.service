@@ -1,4 +1,4 @@
-# /etc/systemd/system/peopleops.service — as installed on the VPS (2026-11-09)
+# /etc/systemd/system/peopleops.service — as installed on the VPS (hardened 2026-11-10)
 [Unit]
 Description=People Operations HRIS (Next Ventures assessment)
 After=network.target docker.service
@@ -15,8 +15,25 @@ Restart=always
 RestartSec=5
 MemoryMax=512M
 NoNewPrivileges=true
-ProtectSystem=full
+# Read-only filesystem except the release tree (Next writes .next/cache there) and the AI bridge socket dir.
+ProtectSystem=strict
+ReadWritePaths=/opt/peopleops/releases -/run/peopleops-ai
+ProtectHome=yes
 PrivateTmp=true
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=peopleops

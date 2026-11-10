@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "../db";
 import { AppError, forbidden, rateLimited } from "../errors";
 import { env } from "../env";
-import { hitAiBucket } from "../auth/throttle";
+import { aiBudgetExceeded } from "../auth/throttle";
 import { canAssignRequest, type Actor } from "../auth/permissions";
 import { suggestRouting } from "./router";
 import { loadReadableRequest } from "../requests/service";
@@ -45,7 +45,7 @@ export async function generateRequestSuggestion(requestId: string, budgetUserId:
     if (!r) return "FAILED";
     const before = await db.requestAiSuggestion.findUnique({ where: { requestId }, select: { status: true } });
     hadReady = before?.status === "READY";
-    if ((await hitAiBucket(budgetUserId)) > env.aiLimitPerMinute()) {
+    if (await aiBudgetExceeded(budgetUserId, env.aiLimitPerMinute(), env.aiGlobalLimitPerHour())) {
       if (hadReady) return "KEPT_PREVIOUS";
       await db.requestAiSuggestion.upsert({ where: { requestId }, create: { requestId, status: "FAILED", failureReason: "RATE_LIMITED" }, update: { status: "FAILED", failureReason: "RATE_LIMITED" } });
       return "FAILED";

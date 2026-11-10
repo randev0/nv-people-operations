@@ -1,0 +1,10 @@
+# /etc/systemd/system/peopleops-reset.timer — 19:17 UTC = 03:17 in Kuala Lumpur
+[Unit]
+Description=Nightly People Operations demo data reset
+
+[Timer]
+OnCalendar=*-*-* 19:17:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target
