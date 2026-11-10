@@ -480,7 +480,7 @@ The dashboard returns data for two views per role: **Today** (a work queue of th
 | Method | Path | Request → Response | Who |
 | --- | --- | --- | --- |
 | POST | /ai/route-request | `{title, description}` → RouterDTO `{categoryId, priority, suggestedDepartmentId, suggestedAssigneeId?, explanation, needsReview}` (draft help; nothing is written) | Signed in; 10/min |
-| GET | /requests/:id/ai-suggestion | → stored suggestion (the person is included only for users who can assign) | Read scope |
+| GET | /requests/:id/ai-suggestion | → stored suggestion (the person is included only for users who can assign; the UI shows it only to them) | Read scope |
 | POST | /requests/:id/ai-suggestion | → a fresh suggestion | Can assign; 10/min |
 
 **Operations:** `GET /health` → `{status:"ok"}` (public, reveals nothing about configuration). `POST /client-errors` `{kind, message, digest?, path}` → 204: browser error reports, same-origin only, capped per minute, logged as `client.error`. Any other `/api/*` path answers a JSON 404.
@@ -505,7 +505,7 @@ The dashboard returns data for two views per role: **Today** (a work queue of th
 | Employee list | — | self + direct reports (read-only) | all |
 | Dashboard: Today work queue | own tasks; own resolved requests to close | + team requests to assign | + all requests to assign |
 | Dashboard: Insights view | own requests, work and checklist | team overdue, equipment and progress + own figures | organisation-wide reporting |
-| AI suggestions | while drafting; team/category on own requests | + suggested person on requests I can assign | same, all open requests |
+| AI suggestions | while drafting a request (on the form) | + the stored suggestion, with a person, on requests I can assign until work starts | same, all requests waiting for assignment |
 
 ### 4.2 How it is enforced
 

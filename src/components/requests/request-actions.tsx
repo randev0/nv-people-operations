@@ -133,8 +133,10 @@ export function AssignmentPanel({ request, suggestion, onAssigned, onConflict, o
     />
   );
 
-  // Not an assigner: only the (read-only) AI routing note, if any.
-  if (!canAssign) return ai;
+  // The stored suggestion is routing help for whoever assigns. Requesters and assignees see
+  // the outcome (status, assignee) instead; a stale "suggests team X" next to a real assignee
+  // only confuses. The requester's own help is the draft suggestion on the new-request form.
+  if (!canAssign) return null;
 
   return (
     <div className="space-y-3">

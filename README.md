@@ -94,7 +94,7 @@ The seed is idempotent. It only creates missing fixture rows (deterministic IDs 
 | `npm run test:e2e` | Same harness with Playwright: request lifecycle with AI routing, task unblocking, template editor, role navigation, dashboard tabs and figures against their lists, assignment (single, stale, bulk), error pages and session expiry, keyboard-only use, axe accessibility scan, 390 px layout |
 | `npm run db:generate` / `db:migrate` / `db:seed` / `db:verify-seed` | Prisma client, `migrate deploy`, seed, seed assertions |
 
-Latest results (2026-11-10): lint 0 problems, typecheck 0 errors, unit 42/42, integration 34/34, e2e 25/25 (including keyboard-only use and an axe WCAG 2.1 AA scan of 27 pages), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
+Latest results (2026-11-10): lint 0 problems, typecheck 0 errors, unit 42/42, integration 34/34, e2e 26/26 (including keyboard-only use and an axe WCAG 2.1 AA scan of 27 pages), seed verification 22/22. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 
 ## Deployment
 

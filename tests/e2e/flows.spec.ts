@@ -217,3 +217,17 @@ test("compiled CSS contains opacity-modified colour classes (bg-primary/90, bg-d
     expect(selectors.some((s) => s.includes(cls)), `${cls} missing from compiled CSS`).toBe(true);
   }
 });
+
+// The stored AI suggestion is for assigners only; the requester sees status and assignee, not routing notes.
+test("requester's request page has no AI routing panel; the assigner's has one", async ({ page }) => {
+  await signIn(page, "employee.my@example.com");
+  await page.goto("/requests?scope=mine");
+  await page.getByRole("link", { name: "Laptop handover still pending" }).first().click();
+  await expect(page.getByRole("heading", { name: /Laptop handover still pending/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "AI routing suggestion" })).toHaveCount(0);
+  const url = page.url();
+  await signOut(page);
+  await signIn(page, "manager.my@example.com");
+  await page.goto(url);
+  await expect(page.getByRole("region", { name: "AI routing suggestion" })).toBeVisible();
+});
