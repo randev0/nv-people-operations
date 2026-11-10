@@ -41,9 +41,10 @@ Seeding was first run on 2026-11-09 (`ALLOW_ASSESSMENT_SEED=true npx tsx prisma/
 
 The demo passwords are public (README), so the data is rebuilt every night by `peopleops-reset.timer` (19:17 UTC, 03:17 in Kuala Lumpur) running `/opt/peopleops/bin/reset-demo.sh` (source: `deploy/reset-demo.sh`, units `deploy/peopleops-reset.{service,timer}`). The script:
 
-1. takes a `pg_dump` to `/root/backups/peopleops/before-reset-<UTC time>.dump` (0700 folder, last 7 kept);
+1. takes a `pg_dump` to `/root/backups/peopleops/before-reset-<UTC time>.dump` (0700 folder, files 0600, last 7 kept);
 2. stops the app (always restarted on exit);
-3. drops and recreates the `public` schema of the `peopleops` database only, runs `prisma migrate deploy`, the seed (`ALLOW_ASSESSMENT_SEED=true` set for that one command) and `verify-seed.ts`.
+3. drops and recreates the `public` schema of the `peopleops` database only, runs `prisma migrate deploy`, the seed (`ALLOW_ASSESSMENT_SEED=true` set for that one command) and `verify-seed.ts`;
+4. starts the app and regenerates the stored AI suggestions for open, still-assignable requests as `hr.admin` (one every 7 s, under the per-user limit), since those come from the live model rather than the seed.
 
 Run it by hand with `systemctl start peopleops-reset`; logs in `journalctl -u peopleops-reset`. Dates in the seed are relative to the day it runs, so overdue and due-soon items stay realistic. Restore a backup with `docker exec -i peopleops-postgres pg_restore -U peopleops -d peopleops --clean < <dump>`.
 

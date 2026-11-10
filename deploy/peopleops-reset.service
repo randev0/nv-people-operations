@@ -8,4 +8,5 @@ Requires=docker.service
 Type=oneshot
 EnvironmentFile=/etc/peopleops/peopleops.env
 ExecStart=/opt/peopleops/bin/reset-demo.sh
+TimeoutStartSec=15min
 SyslogIdentifier=peopleops-reset
