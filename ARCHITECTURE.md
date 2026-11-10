@@ -69,12 +69,12 @@ flowchart LR
   classDef system fill:#1168bd,stroke:#0b4884,color:#fff
   classDef ext fill:#999,stroke:#6b6b6b,color:#fff
 
-  emp["👤 Employee<br/><small>submits requests, follows own onboarding,<br/>works tasks/requests assigned to them</small>"]:::person
-  mgr["👤 Manager<br/><small>assigns team requests,<br/>monitors direct reports' onboarding</small>"]:::person
-  hr["👤 HR Admin<br/><small>sees everything, manages templates,<br/>employees and the HR dashboard</small>"]:::person
+  emp["👤 Employee<br/>submits requests, follows own onboarding,<br/>works tasks/requests assigned to them"]:::person
+  mgr["👤 Manager<br/>assigns team requests,<br/>monitors direct reports' onboarding"]:::person
+  hr["👤 HR Admin<br/>sees everything, manages templates,<br/>employees and the HR dashboard"]:::person
 
-  sys["People Operations<br/><small>Service Requests + Onboarding<br/>on a shared people & access core</small>"]:::system
-  llm["LLM provider<br/><small>GPT-6.1 Sol via Codex CLI (deployed)<br/>OpenAI / Anthropic API (configurable)</small>"]:::ext
+  sys["People Operations<br/>Service Requests + Onboarding<br/>on a shared people & access core"]:::system
+  llm["LLM provider<br/>GPT-6.1 Sol via Codex CLI (deployed)<br/>OpenAI / Anthropic API (configurable)"]:::ext
 
   emp -- "HTTPS (browser)" --> sys
   mgr -- "HTTPS (browser)" --> sys
@@ -96,16 +96,16 @@ flowchart TB
   user["👤 Employee / Manager / HR Admin"]:::person
 
   subgraph vps["VPS 77.42.88.180 (Ubuntu 24.04, shared host)"]
-    nginx["nginx<br/><small>TLS (Let's Encrypt), reverse proxy,<br/>sets client IP header</small>"]:::container
+    nginx["nginx<br/>TLS (Let's Encrypt), reverse proxy,<br/>sets client IP header"]:::container
     subgraph app["Next.js 16 application — systemd: peopleops (Node 24)"]
-      web["Web UI<br/><small>React Server Components + client islands<br/>role-aware navigation</small>"]:::container
-      api["JSON API<br/><small>Route handlers: zod validation,<br/>origin check, error envelope</small>"]:::container
-      domain["Domain services<br/><small>auth · people · requests · onboarding ·<br/>dashboard · AI router</small>"]:::container
+      web["Web UI<br/>React Server Components + client islands<br/>role-aware navigation"]:::container
+      api["JSON API<br/>Route handlers: zod validation,<br/>origin check, error envelope"]:::container
+      domain["Domain services<br/>auth · people · requests · onboarding ·<br/>dashboard · AI router"]:::container
     end
-    pg[("PostgreSQL 16<br/><small>docker: peopleops-postgres<br/>127.0.0.1:5442</small>")]:::db
-    bridge["AI bridge<br/><small>systemd: peopleops-ai (own Linux user,<br/>own Codex login), unix socket</small>"]:::container
+    pg[("PostgreSQL 16<br/>docker: peopleops-postgres<br/>127.0.0.1:5442")]:::db
+    bridge["AI bridge<br/>systemd: peopleops-ai (own Linux user,<br/>own Codex login), unix socket"]:::container
   end
-  llm["OpenAI (GPT-6.1 Sol)<br/><small>via Codex CLI</small>"]:::ext
+  llm["OpenAI (GPT-6.1 Sol)<br/>via Codex CLI"]:::ext
 
   user -- "HTTPS 443" --> nginx
   nginx -- "HTTP 127.0.0.1:3310" --> web
@@ -135,31 +135,31 @@ flowchart TB
   classDef consumer fill:#eef7ee,stroke:#2e7d32,color:#1b3d1d
   classDef infra fill:#f3f3f3,stroke:#777,color:#222
 
-  edge["HTTP edge — src/server/http.ts<br/><small>request id · Origin check · zod parsing · error envelope · no-store</small>"]:::infra
+  edge["HTTP edge — src/server/http.ts<br/>request id · Origin check · zod parsing · error envelope · no-store"]:::infra
 
   subgraph modA["Module A — Service Requests"]
     direction TB
-    rsvc["requests/service.ts<br/><small>create · list · comment · assign · transition</small>"]:::module
-    rsm["requests/state-machine.ts<br/><small>pure transition table</small>"]:::module
+    rsvc["requests/service.ts<br/>create · list · comment · assign · transition"]:::module
+    rsm["requests/state-machine.ts<br/>pure transition table"]:::module
   end
 
   subgraph modB["Module B — Onboarding"]
     direction TB
-    osvc["onboarding/service.ts · templates.ts<br/><small>versioned templates · snapshot assignment · My Work · task transitions</small>"]:::module
-    dag["dependencies.ts · dates.ts<br/><small>DAG validation · derived BLOCKED · timezone-aware overdue</small>"]:::module
+    osvc["onboarding/service.ts · templates.ts<br/>versioned templates · snapshot assignment · My Work · task transitions"]:::module
+    dag["dependencies.ts · dates.ts<br/>DAG validation · derived BLOCKED · timezone-aware overdue"]:::module
   end
 
   subgraph cons["Read-only consumers"]
     direction TB
-    dash["dashboard/service.ts<br/><small>org + personal aggregates across both modules</small>"]:::consumer
-    ai["ai/<br/><small>router · providers · stored suggestions</small>"]:::consumer
+    dash["dashboard/service.ts<br/>org + personal aggregates across both modules"]:::consumer
+    ai["ai/<br/>router · providers · stored suggestions"]:::consumer
   end
 
   subgraph core["Shared core — used by everything above"]
     direction LR
-    perm["auth/permissions.ts<br/><small>ONE policy module: can* checks +<br/>scope filters for list & detail</small>"]:::shared
-    auth["auth/<br/><small>session · current user · password · throttle</small>"]:::shared
-    people["people/<br/><small>employees · reporting lines · departments · countries</small>"]:::shared
+    perm["auth/permissions.ts<br/>ONE policy module: can* checks +<br/>scope filters for list & detail"]:::shared
+    auth["auth/<br/>session · current user · password · throttle"]:::shared
+    people["people/<br/>employees · reporting lines · departments · countries"]:::shared
   end
 
   db[("Prisma → PostgreSQL")]:::infra
