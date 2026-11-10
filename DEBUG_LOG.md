@@ -1,6 +1,6 @@
 # Debug Log
 
-The three most significant bugs from development, in the required format, followed by four more found later and recorded the same way. Raw notes, written as things happened, are in `WORKLOG.md`; commit hashes point to the fixes.
+The three most significant bugs from development, in the required format, followed by five more found later and recorded the same way. Raw notes, written as things happened, are in `WORKLOG.md`; commit hashes point to the fixes.
 
 Why these three: Bug 1 was a security defect (a signed-out session stayed usable), Bug 2 leaked passwords into URLs and logs, and Bug 3 broke the harness that proves the AI feature degrades safely, while looking exactly like a real AI outage. All were observed at runtime and reproduced before they were fixed; none were introduced deliberately.
 
@@ -13,6 +13,7 @@ Why these three: Bug 1 was a security defect (a signed-out session stayed usable
 | 5 | Frontend build | Tailwind opacity classes silently missing from the CSS | `e654398` |
 | 6 | Dashboard data | Dashboard figures opened lists with different records | dashboard review, 2026-11-09 |
 | 7 | Frontend state | "Use as assignee" failed with a false "not eligible" error | dashboard review, 2026-11-09 |
+| 8 | Deployment / operations | Demo reset dropped the live database, then could not rebuild it | 2026-11-10, see entry |
 
 ---
 
@@ -122,7 +123,7 @@ The same run's console showed `Refused to execute script from '…/_next/static/
 
 ## Further bugs, same format
 
-Found after the first three were written up: in the exploratory re-test (4), the UI redesign (5) and a calculation-by-calculation dashboard review (6, 7).
+Found after the first three were written up: in the exploratory re-test (4), the UI redesign (5), a calculation-by-calculation dashboard review (6, 7) and the final pre-submission check on the live server (8).
 
 ### Bug 4 — The security headers blocked every script on the 404 page
 
@@ -213,3 +214,39 @@ The build summary then lists `ƒ /_not-found` (dynamic). Cost: no static HTML ca
 **Verification:** e2e suite run twice in a row after the fix: 12/12 both times.
 
 **Prevention:** UI handlers distinguish "not loaded yet" from "not allowed" (pending state kept and applied on load); the e2e flow clicks the suggestion as early as possible.
+
+### Bug 8 — The demo reset dropped the live database, then could not rebuild it
+
+**Affected date:** 2026-11-10, 02:47–02:52 UTC, on the live server. Outage about four minutes.
+
+**Symptom:** a manual run of the nightly reset (`systemctl start peopleops-reset`), done to clear walkthrough test data before submission, ended `failed`. The journal showed the schema drop succeeding (`drop cascades to 26 other objects`), then:
+
+```text
+npm error npx canceled due to missing packages and no YES option: ["prisma@8.0.0-rc.33"]
+```
+
+The app was restarted by the script's error trap, so `/api/health` answered `ok`, but the database had no tables: every page would have failed.
+
+**Investigation:**
+- The same script had succeeded twice earlier that day, so the script itself was not the first suspect; something under it had changed. `npx --no-install` refusing and offering to download an unrelated prisma version meant the local `prisma` binary was gone.
+- `ls /opt/peopleops/current/tools/node_modules/.bin` → no such directory. `ls -la tools/` showed why: `node_modules`, `package.json` and `package-lock.json` were **symlinks** to `/opt/peopleops/releases/3d6304d/tools/…`, an early release.
+- That release had been deleted an hour earlier by the new release-retention step (keep the newest three). Every later release had copied `tools/` from the previous one with `cp -a`, which preserves symlinks, so all of them pointed at `3d6304d`.
+
+**Root cause:** release directories were not self-contained (symlinks into an older release), and the pruning step assumed they were. The reset script then made it worse by dropping the schema before checking that it could rebuild it, and by starting the app on an empty database.
+
+**Fix:**
+- Immediate: rebuilt `tools/` as a real directory from the current repository (`prisma/`, the two date helpers, pinned `prisma`, `@prisma/client`, `tsx`, `bcryptjs`), ran `prisma generate`, re-ran the reset: seed checks 22/22, site back.
+- `deploy/reset-demo.sh`: a **preflight** before the backup and the drop (prisma, tsx, the generated client and the seed files must all be present, or nothing is touched); and if any step after the drop fails, the trap **restores the backup it has just taken** before starting the app, instead of starting it on an empty schema.
+
+```bash
+restore() {
+  docker exec -i peopleops-postgres pg_restore -U peopleops -d peopleops --clean --if-exists --no-owner < "$BACKUPS/before-reset-$TS.dump" || true
+  systemctl start peopleops
+}
+trap restore ERR
+```
+
+**Verification:** the restore command was run against a scratch database in the same container from that run's backup (row counts matched); the next reset ran with the preflight and passed 22/22.
+
+**Prevention:** releases must be self-contained (`find <release> -lname '/opt/peopleops/releases/*'` must be empty before pruning, recorded in DEPLOY.md); destructive maintenance checks its tools before it destroys anything, and every destructive step has an automatic way back.
+

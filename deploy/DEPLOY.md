@@ -44,7 +44,8 @@ The demo passwords are public (README), so the data is rebuilt every night by `p
 1. takes a `pg_dump` to `/root/backups/peopleops/before-reset-<UTC time>.dump` (0700 folder, files 0600, last 7 kept);
 2. stops the app (always restarted on exit);
 3. drops and recreates the `public` schema of the `peopleops` database only, runs `prisma migrate deploy`, the seed (`ALLOW_ASSESSMENT_SEED=true` set for that one command) and `verify-seed.ts`;
-4. starts the app and regenerates the stored AI suggestions for open, still-assignable requests as `hr.admin` (one every 7 s, under the per-user limit), since those come from the live model rather than the seed.
+4. preflight first: refuses to run unless prisma, tsx, the generated client and the seed files are present (nothing is touched otherwise); if any step after the drop fails, it restores the backup it just took, then starts the app;
+5. starts the app and regenerates the stored AI suggestions for open, still-assignable requests as `hr.admin` (one every 7 s, under the per-user limit), since those come from the live model rather than the seed.
 
 Run it by hand with `systemctl start peopleops-reset`; logs in `journalctl -u peopleops-reset`. Dates in the seed are relative to the day it runs, so overdue and due-soon items stay realistic. Restore a backup with `docker exec -i peopleops-postgres pg_restore -U peopleops -d peopleops --clean < <dump>`.
 
@@ -73,6 +74,6 @@ Service sandboxing (2026-11-10): besides the unprivileged user, `peopleops.servi
 
 SSH is key-only for every user (`/etc/ssh/sshd_config.d/10-key-only.conf`, 2026-11-10). If the key is lost, use the hosting provider's web console to add a new one.
 
-Release retention: only the current release and the two before it are kept in `/opt/peopleops/releases` (older ones removed after each deploy: `ls -1t | tail -n +4`), since the disk is shared.
+Release retention: only the current release and the two before it are kept in `/opt/peopleops/releases` (older ones removed after each deploy: `ls -1t | tail -n +4`), since the disk is shared. Each release's `tools/` must be a real directory: on 2026-11-10 `tools/node_modules` and `tools/package.json` turned out to be symlinks into an early release, so pruning that release broke migrate and seed (see DEBUG_LOG Bug 8). Before pruning, check `find /opt/peopleops/releases/<current> -lname '/opt/peopleops/releases/*'` returns nothing. `reset-demo.sh` now refuses to start unless the tools work, and restores its own backup if any step after the drop fails.
 
 Logs: `journalctl -u peopleops -f` (browser-side errors appear as `"event":"client.error"` lines). Rollback: point `/opt/peopleops/current` at the previous release and restart.

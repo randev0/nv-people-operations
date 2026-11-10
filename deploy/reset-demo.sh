@@ -10,16 +10,29 @@ TS=$(date -u +%Y%m%d-%H%M%S)
 BACKUPS=/root/backups/peopleops
 install -d -m 700 "$BACKUPS"
 
+# Preflight: the tools must work BEFORE anything is dropped (2026-11-10: tools/node_modules was a
+# symlink into a pruned release, migrate failed after the drop and the site ran on an empty database).
+TOOLS=/opt/peopleops/current/tools
+cd "$TOOLS"
+test -f prisma/seed.ts && test -f prisma/verify-seed.ts
+npx --no-install prisma --version >/dev/null
+test -x node_modules/.bin/tsx && node -e "require('@prisma/client'); require('bcryptjs')"
+
 docker exec peopleops-postgres pg_dump -U peopleops -Fc peopleops > "$BACKUPS/before-reset-$TS.dump"
 ls -1t "$BACKUPS"/before-reset-*.dump | tail -n +8 | xargs -r rm --
 
-# The app is stopped for the ~10 s rebuild so nobody sees a half-seeded database; restarted even on failure.
+# The app is stopped for the ~10 s rebuild so nobody sees a half-seeded database. If any step after
+# the drop fails, the backup just taken is restored before the app starts again.
+restore() {
+  echo "reset failed; restoring $BACKUPS/before-reset-$TS.dump" >&2
+  docker exec -i peopleops-postgres pg_restore -U peopleops -d peopleops --clean --if-exists --no-owner < "$BACKUPS/before-reset-$TS.dump" || true
+  systemctl start peopleops
+}
 systemctl stop peopleops
-trap 'systemctl start peopleops' ERR
+trap restore ERR
 
 docker exec peopleops-postgres psql -U peopleops -d peopleops -v ON_ERROR_STOP=1 -q \
   -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
-cd /opt/peopleops/current/tools
 npx --no-install prisma migrate deploy
 ALLOW_ASSESSMENT_SEED=true npx --no-install tsx prisma/seed.ts
 npx --no-install tsx prisma/verify-seed.ts

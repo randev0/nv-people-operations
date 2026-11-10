@@ -16,7 +16,7 @@ An HRIS module built for the Next Ventures **HRIS Systems Developer** technical 
 | Each requirement and the evidence that it works | [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
 | Who can see and do what | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) |
 | Endpoints and payloads | [docs/API_CONTRACT.md](docs/API_CONTRACT.md) |
-| The three most significant bugs, debugged step by step (plus four more, same format) | [DEBUG_LOG.md](DEBUG_LOG.md) |
+| The three most significant bugs, debugged step by step (plus five more, same format) | [DEBUG_LOG.md](DEBUG_LOG.md) |
 | Dashboard screen design and work-queue ordering | [docs/DASHBOARD.md](docs/DASHBOARD.md) |
 | A "try to break it" test run, its findings and how each was fixed | [docs/QA_FINDINGS.md](docs/QA_FINDINGS.md) |
 | Day-by-day engineering notes and decisions | [WORKLOG.md](WORKLOG.md) |
