@@ -100,8 +100,9 @@ export function AiSuggestionPanel({
   const priDiffers = s.priority && s.priority !== currentPriority;
   return (
     <section className="rounded-xl border border-info/25 bg-info/[0.06] px-4 py-3 text-sm" aria-labelledby="ai-sugg" aria-live="polite">
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div className="min-w-0 flex-1">
+      {/* Phones: text full width, actions underneath. From sm up: actions beside the text. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-x-4">
+        <div className="min-w-0 sm:flex-1">
           <h2 id="ai-sugg" className="text-xs font-semibold text-muted-foreground">
             <Sparkles className="mr-1.5 inline h-3.5 w-3.5 align-[-2px] text-link" aria-hidden />AI routing suggestion
             <span className="block font-normal sm:ml-1 sm:inline">· advisory, a person decides</span>
@@ -123,13 +124,13 @@ export function AiSuggestionPanel({
                   {priDiffers ? <span className="text-warning"> (submitted as {PRIORITY_LABEL[currentPriority]})</span> : null}
                 </span>
               </p>
-              {s.explanation ? <p className="mt-1 line-clamp-3 text-xs text-muted-foreground" title={s.explanation}>{s.explanation}</p> : null}
+              {s.explanation ? <p className="mt-1 text-xs text-muted-foreground sm:line-clamp-3" title={s.explanation}>{s.explanation}</p> : null}
             </>
           ) : null}
           {error ? <p className="mt-1 text-destructive" role="alert">{error}</p> : null}
         </div>
         {s.canRegenerate ? (
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 sm:shrink-0">
             {s.status === "READY" && catDiffers && onUsePerson && version !== undefined ? (
               <Button size="sm" type="button" variant="outline" onClick={useCategory} disabled={moving}>
                 {moving ? "Moving…" : `Move to ${s.category?.name}`}
