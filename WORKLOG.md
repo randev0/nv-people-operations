@@ -241,3 +241,6 @@
 - Question from review: why does a requester's request page show an "AI routing suggestion" inside Status, on a request already assigned? It was a design leftover: the stored suggestion is routing help for assigners, but the page also showed a read-only copy to everyone else. For a requester it adds nothing (they already chose the category and priority; the assignee is shown) and can contradict reality ("suggests People & Culture" beside a named assignee).
 - Change: the request page shows the stored suggestion only to someone who can assign the request, while it can still be assigned (SUBMITTED / ASSIGNED). Requesters keep the draft suggestion on the new-request form. The API is unchanged (person still withheld from non-assigners, name redaction kept). New e2e test: requester's page has no AI panel, the assigner's has one. ARCHITECTURE §3/§4.1 updated.
 - Checks: lint 0, typecheck 0, unit 42/42, integration 34/34, e2e 26/26.
+
+## 2026-11-11 — Template editor prerequisite hint
+- Question from review: a new template shows no prerequisite checkboxes. By design, prerequisites are other tasks in the same template, so a one-task template has none to offer; the old hint "No other tasks." didn't say that. Reworded to explain it and to say to add another task. e2e 26/26.

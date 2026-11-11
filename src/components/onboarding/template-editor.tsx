@@ -180,7 +180,7 @@ export function TemplateEditor({ departments, template }: { departments: Dept[];
                           {o.title || o.key}
                         </label>
                       ))}
-                      {tasks.length === 1 ? <span className="text-sm text-muted-foreground">No other tasks.</span> : null}
+                      {tasks.length === 1 ? <span className="text-sm text-muted-foreground">Prerequisites are chosen from the other tasks in this template. Add another task to pick one here.</span> : null}
                     </div>
                   </fieldset>
                 </div>
